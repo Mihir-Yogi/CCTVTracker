@@ -1,0 +1,1361 @@
+CAMOPS — MASTER REPLIT BUILD PROMPT
+
+Frontend-First Implementation + MongoDB + Secure Authentication
+
+You are the primary AI development agent for this project.
+
+You are building:
+
+CamOps
+
+CCTV Infrastructure & Operational Tracking System
+
+I have provided screenshots of an existing/sample interface. Use those screenshots as visual references for the general layout, navigation structure, forms, tables, spacing, typography, colors, and enterprise dashboard style.
+
+The screenshots are NOT the complete final specification. The actual business requirements below are the source of truth.
+
+⸻
+
+1. MOST IMPORTANT DEVELOPMENT RULE
+
+Build this project in controlled phases.
+
+PHASE 1 — FRONTEND FIRST
+
+First build and complete the frontend:
+
+* Application shell
+* Sidebar
+* Header
+* Navigation
+* Dashboard
+* Login page
+* Registration page
+* Location screens
+* NVR/DVR screens
+* HDD screens
+* Combo screens
+* CCTV screens
+* Transaction/Operations screens
+* Failure screens
+* Replacement History screens
+* Reports screens
+* User management screens
+* Settings screens
+* Empty states
+* Loading states
+* Error states
+* Responsive layouts
+* Role-specific navigation
+
+Use realistic mock/sample data where necessary during frontend development.
+
+DO NOT connect the real database during the initial frontend phase.
+
+However, structure the frontend so that replacing mock data with real API data later does not require rewriting the UI.
+
+After Phase 1 is complete, STOP and report:
+
+FRONTEND PHASE COMPLETE — READY FOR BACKEND INTEGRATION
+
+Do not automatically move to backend implementation unless explicitly instructed.
+
+⸻
+
+2. SECOND PHASE — BACKEND + MONGODB
+
+After the frontend is approved, implement:
+
+* Backend
+* MongoDB Atlas
+* Authentication
+* Authorization
+* Real CRUD
+* Validation
+* Status tracking
+* Failure incidents
+* Replacement history
+* Audit logs
+* Reports
+* Real dashboard statistics
+
+The final application must work independently of Replit and be runnable locally.
+
+⸻
+
+3. IMPORTANT: INSPECT THE EXISTING PROJECT FIRST
+
+Before creating or replacing anything:
+
+1. Scan the complete repository.
+2. Identify the existing framework.
+3. Inspect all routes.
+4. Inspect controllers.
+5. Inspect models.
+6. Inspect views/components.
+7. Inspect CSS.
+8. Inspect JavaScript.
+9. Inspect configuration.
+10. Inspect authentication.
+11. Inspect database configuration.
+12. Inspect existing pages.
+13. Inspect existing functionality.
+14. Identify what can be reused.
+
+The screenshots show an existing Laravel-style application.
+
+If the repository is already a Laravel application, continue using Laravel rather than replacing it with React/Next.js or another framework.
+
+Do not rebuild the project from scratch unless the existing project is genuinely unusable.
+
+⸻
+
+4. PREFERRED TECHNOLOGY
+
+If the existing repository is Laravel, use:
+
+Application
+
+Laravel
+
+Frontend
+
+Laravel Blade + Tailwind CSS + JavaScript/Alpine.js where appropriate.
+
+Do not introduce React/Next.js unless the existing project already uses it or there is a compelling documented reason.
+
+Database
+
+MongoDB Atlas.
+
+Use a proper Laravel-compatible MongoDB integration.
+
+Do NOT design the application around MySQL/PostgreSQL if MongoDB is the approved database.
+
+Authentication
+
+Use Laravel’s secure authentication mechanisms and server-side authorization.
+
+Deployment
+
+The application must eventually be capable of running:
+
+* Locally
+* On a normal PHP/Laravel server
+* With MongoDB Atlas
+
+It must not depend on Replit for runtime functionality.
+
+⸻
+
+5. MONGODB REQUIREMENT
+
+The production database must be:
+
+MongoDB Atlas
+
+The application must use environment variables.
+
+Example:
+
+MONGODB_URI=
+MONGODB_DATABASE=
+
+Never hardcode:
+
+* MongoDB URI
+* Password
+* API key
+* Secret key
+* Admin credentials
+
+Create/update:
+
+.env.example
+
+with placeholders only.
+
+The repository must not contain real credentials.
+
+⸻
+
+6. PROJECT NAME / BRAND
+
+Use:
+
+CamOps
+
+Subtitle:
+
+CCTV Infrastructure & Operational Tracking System
+
+The interface should feel like a professional enterprise application.
+
+Do not make it look like a generic student CRUD project.
+
+⸻
+
+7. VISUAL DIRECTION
+
+Use the uploaded screenshots as visual references.
+
+The existing visual direction contains:
+
+* Left sidebar
+* Top navigation/header
+* Clean white/light background
+* Blue/cyan primary action elements
+* Simple line icons
+* Spacious forms
+* Enterprise tables
+* Clear headings
+* Compact navigation
+* Dashboard metric cards
+
+Keep the same general visual language but improve it where necessary.
+
+Do not blindly copy poor spacing or inconsistencies from the screenshots.
+
+The final UI should be:
+
+* Professional
+* Clean
+* Consistent
+* Responsive
+* Easy to operate
+* Suitable for large organizations
+* Fast for operators performing daily status updates
+
+⸻
+
+8. DESIGN SYSTEM
+
+Create a centralized design system.
+
+Define consistently:
+
+* Primary color
+* Secondary color
+* Background
+* Surface
+* Border
+* Text
+* Muted text
+* Success
+* Warning
+* Error
+* Info
+
+Use consistent:
+
+* Border radius
+* Shadows
+* Typography
+* Input heights
+* Button sizes
+* Table styles
+* Card styles
+* Modal styles
+* Badge styles
+* Spacing
+
+Do not randomly style individual pages.
+
+⸻
+
+9. APPLICATION SHELL
+
+Create a common authenticated application layout:
+
+┌──────────────────────────────────────────────┐
+│ Sidebar │ Header                             │
+│         ├────────────────────────────────────│
+│         │                                    │
+│         │ Page Content                       │
+│         │                                    │
+│         │                                    │
+└─────────┴────────────────────────────────────┘
+
+The sidebar should support:
+
+* Expand/collapse
+* Active navigation state
+* Role-based menu visibility
+* Mobile responsive behavior
+
+⸻
+
+10. SIDEBAR NAVIGATION
+
+Use a structure similar to:
+
+Dashboard
+Infrastructure
+  NVRs
+  DVRs
+  HDDs
+  Combos
+  CCTV Cameras
+Locations
+  Locations
+  Sub-locations
+Operations
+  Daily Transactions
+  Current Failures
+  Maintenance
+Lifecycle
+  Replacement History
+Reports
+Users
+Settings
+Logout
+
+Adjust navigation according to the user’s role.
+
+Do not show options the user cannot access.
+
+⸻
+
+11. THREE USER ROLES
+
+The application currently requires:
+
+1. Super Admin
+
+Global system-level administrator.
+
+Can:
+
+* Manage organizations
+* Manage admins
+* Manage users
+* View all organization data
+* Manage global settings
+* View audit logs
+* View reports
+* Configure system options
+
+⸻
+
+2. Admin
+
+Organization-level administrator.
+
+Can manage:
+
+* Locations
+* Sub-locations
+* NVRs
+* DVRs
+* HDDs
+* Combos
+* CCTV cameras
+* Operators
+* Replacement records
+* Operational information
+* Reports
+
+Admin must only access the organization(s) assigned to them.
+
+⸻
+
+3. Operator
+
+Operational user.
+
+Primary purpose:
+
+* View assigned infrastructure
+* Perform daily status updates
+* Update CCTV status
+* Update NVR/DVR status
+* Update HDD status
+* Select predefined failure reasons
+* Add remarks
+* Confirm daily transactions
+
+Operator should NOT have unrestricted administrative access.
+
+⸻
+
+12. SECURE REGISTRATION RULE
+
+This is extremely important.
+
+Do NOT create a public registration form that allows anyone to choose:
+
+Super Admin
+Admin
+Operator
+
+That would be a security vulnerability.
+
+Instead:
+
+Super Admin
+
+Created through a secure initial/bootstrap setup or controlled deployment process.
+
+Admin
+
+Created/invited by Super Admin.
+
+Operator
+
+Created/invited by an authorized Admin.
+
+The registration/invitation UI may exist, but the user must not be able to escalate their own role.
+
+Example:
+
+Super Admin
+     ↓
+Creates Admin
+     ↓
+Admin receives account/invitation
+     ↓
+Admin logs in
+     ↓
+Admin creates Operator
+
+Role assignment must always be enforced server-side.
+
+⸻
+
+13. LOGIN PAGE
+
+Create a professional login page.
+
+Include:
+
+* CamOps branding
+* Email/username
+* Password
+* Show/hide password
+* Remember me where appropriate
+* Forgot password
+* Login button
+* Loading state
+* Validation errors
+* Authentication errors
+
+Do not reveal whether an account exists through overly specific error messages.
+
+Example:
+
+Instead of:
+
+Email does not exist.
+
+Use a generic authentication failure message where appropriate.
+
+⸻
+
+14. REGISTRATION / ACCOUNT SETUP PAGE
+
+Create an appropriate secure registration/invitation interface.
+
+Do not allow arbitrary role selection.
+
+Possible fields:
+
+* Name
+* Email
+* Password
+* Confirm password
+* Organization where applicable
+* Invitation token where applicable
+
+Password requirements should be clearly communicated.
+
+Include:
+
+* Password strength indication
+* Validation
+* Confirm password
+* Secure error states
+* Loading state
+
+⸻
+
+15. DASHBOARD
+
+Create role-specific dashboards.
+
+Super Admin Dashboard
+
+Show system-wide metrics:
+
+Organizations
+Locations
+NVRs
+DVRs
+HDDs
+CCTV Cameras
+Active Failures
+
+⸻
+
+Admin Dashboard
+
+Show organization-level metrics:
+
+Locations
+NVRs
+DVRs
+HDDs
+Cameras
+Working Cameras
+Failed Cameras
+Active Failures
+
+⸻
+
+Operator Dashboard
+
+Focus on operations:
+
+Assigned Locations
+Today's Status
+Working Cameras
+Failed Cameras
+Pending Status Checks
+Active Failures
+
+Do not make all roles see the same dashboard.
+
+⸻
+
+16. LOCATION MANAGEMENT
+
+Create screens for:
+
+Locations
+
+Fields:
+
+* Location name
+* Organization
+* Address/details
+* Status
+* Description where needed
+
+Example:
+
+Mehsana Central Bus Depot
+
+Sub-location
+
+Fields:
+
+* Sub-location name
+* Parent location
+* Description
+* Status
+
+Example:
+
+Main Control Room
+
+⸻
+
+17. NVR/DVR REGISTRATION
+
+The registration UI must allow:
+
+Device Type:
+NVR / DVR
+
+Fields:
+
+* Manufacturer
+* Model
+* Serial number
+* Manufacture date
+* Purchase date
+* Installation date
+* Warranty duration
+* Warranty expiry
+* Channel capacity
+* Status
+* Location
+* Sub-location
+* Remarks
+
+The system should display the camera capacity clearly.
+
+Example:
+
+32 Channels
+
+⸻
+
+18. HDD REGISTRATION
+
+Fields:
+
+* Manufacturer
+* Model
+* Serial number
+* Capacity
+* Manufacture date
+* Purchase date
+* Installation date
+* Warranty duration
+* Warranty expiry
+* Status
+* Remarks
+
+Current business rule:
+
+One HDD per NVR/DVR.
+
+⸻
+
+19. COMBO
+
+A Combo represents:
+
+NVR/DVR + HDD
+
+The Combo page should clearly show:
+
+* NVR/DVR
+* HDD
+* Location
+* Sub-location
+* Camera capacity
+* Cameras currently assigned
+* Available camera channels
+* Status
+
+Example:
+
+NVR-001
++
+HDD-001
+Capacity: 32
+Connected Cameras: 18
+Available Channels: 14
+
+⸻
+
+20. CCTV REGISTRATION
+
+Create a professional CCTV registration form.
+
+Fields should include:
+
+* Select Combo
+* Camera identifier
+* Serial number
+* Manufacturer
+* Model
+* Megapixel
+* Camera type
+* IP/network identifier where applicable
+* Installation date
+* Purchase date
+* Warranty
+* Physical location
+* Status
+* Remarks
+
+⸻
+
+21. IMPORTANT CCTV LOCATION MODEL
+
+Do NOT use the NVR location as the camera’s physical location.
+
+Example:
+
+Combo:
+NVR-001 + HDD-001
+NVR Location:
+Mehsana Central Bus Depot
+Main Control Room
+
+But:
+
+CAM-001
+Physical Location:
+Main Gate
+CAM-002
+Physical Location:
+Parking
+CAM-003
+Physical Location:
+Platform 1
+
+The UI must make this distinction obvious.
+
+⸻
+
+22. CAMERA LIST PAGE
+
+Create a powerful table.
+
+Columns can include:
+
+* Camera ID
+* Serial Number
+* Model
+* Megapixel
+* Combo
+* Physical Location
+* Status
+* Warranty
+* Actions
+
+Features:
+
+* Search
+* Filter
+* Sort
+* Pagination
+* View
+* Edit
+* Replacement
+* History
+
+⸻
+
+23. NVR/DVR/HDD LIST PAGE
+
+Use a similar enterprise table design.
+
+Include:
+
+* Search
+* Filters
+* Status
+* Location
+* Sub-location
+* Serial number
+* Model
+* Actions
+
+Avoid separate inconsistent designs for every asset page.
+
+Use reusable table components.
+
+⸻
+
+24. DAILY TRANSACTION / OPERATIONS PAGE
+
+This is one of the most important pages.
+
+Operator flow:
+
+Select Location
+        ↓
+Select Sub-location
+        ↓
+Select Combo
+        ↓
+Display connected cameras
+        ↓
+Display current status
+        ↓
+Operator updates/confirms status
+        ↓
+Select predefined reason if required
+        ↓
+Optional remark
+        ↓
+Confirm
+        ↓
+Save daily record
+
+Make this workflow extremely fast.
+
+⸻
+
+25. STATUS OPTIONS
+
+Support options such as:
+
+Working
+Not Working
+Under Maintenance
+Disconnected
+Damaged
+No Power
+Network Issue
+NVR/DVR Issue
+Temporarily Disabled
+Other
+
+If status is healthy:
+
+Reason:
+Not Required
+
+If status indicates a failure:
+
+Reason:
+Required
+
+Do not force the operator to type a reason when a predefined reason is available.
+
+⸻
+
+26. FAILURE PAGE
+
+Create a page showing active failures.
+
+Group/filter by:
+
+* CCTV
+* NVR
+* DVR
+* HDD
+
+Show:
+
+* Asset
+* Serial number
+* Location
+* Sub-location
+* Status
+* Failure reason
+* Failure start date
+* Duration
+* Assigned/recorded by
+* Actions
+
+⸻
+
+27. CONTINUING FAILURE
+
+If a camera is marked:
+
+09 Aug
+Not Working
+Reason: No Power
+
+and remains unavailable:
+
+10 Aug
+11 Aug
+12 Aug
+
+do NOT create a completely new failure incident every day.
+
+Show:
+
+Failure Since:
+09 Aug
+Duration:
+4 days
+Reason:
+No Power
+
+When repaired:
+
+Status:
+Working
+Remark:
+Power restored
+
+close the failure incident.
+
+⸻
+
+28. REPLACEMENT HISTORY
+
+Create a dedicated replacement-history module.
+
+Support:
+
+* Camera replacement
+* NVR replacement
+* DVR replacement
+* HDD replacement
+
+Display:
+
+Old Asset
+New Asset
+Replacement Date
+Reason
+Performed By
+Remarks
+
+Old assets must remain historically traceable.
+
+⸻
+
+29. REPORTS
+
+Create a professional report section.
+
+Filters:
+
+* Date
+* Date range
+* Organization
+* Location
+* Sub-location
+* Combo
+* NVR/DVR
+* HDD
+* Camera
+* Status
+* Failure reason
+
+Report types:
+
+* Daily status
+* Failed devices
+* Camera downtime
+* Replacement history
+* Location-wise status
+* Asset report
+
+Add export buttons in the UI.
+
+Actual export backend can be implemented in Phase 2.
+
+⸻
+
+30. AUDIT LOG UI
+
+Create an audit-log page for authorized users.
+
+Show:
+
+* User
+* Action
+* Entity
+* Entity ID
+* Previous value
+* New value
+* Date/time
+
+Make it read-only.
+
+⸻
+
+31. USERS PAGE
+
+Super Admin:
+
+Organizations
+Admins
+Operators
+
+Admin:
+
+Operators
+
+Provide:
+
+* Search
+* Filter by role
+* Status
+* Create
+* Edit
+* Activate/deactivate
+* View details
+
+Never allow a lower-level user to elevate their own role.
+
+⸻
+
+32. SETTINGS
+
+Create a professional settings section.
+
+Potential sections:
+
+* Profile
+* Password
+* Status options
+* Failure reasons
+* Organization settings
+* System preferences
+
+Only show settings allowed for the current role.
+
+⸻
+
+33. RESPONSIVE DESIGN
+
+The application must work properly on:
+
+* Desktop
+* Laptop
+* Tablet
+* Mobile
+
+The primary use case is desktop/laptop because operators may work from control rooms, but mobile responsiveness is still required.
+
+⸻
+
+34. UX QUALITY
+
+Every page must have:
+
+Loading state
+
+Use skeleton/spinner where appropriate.
+
+Empty state
+
+Example:
+
+No CCTV cameras found.
+
+with an appropriate action.
+
+Error state
+
+Show useful user-facing errors.
+
+Success feedback
+
+After successful operations:
+
+Camera registered successfully.
+
+Confirmation
+
+Dangerous actions such as:
+
+* Delete
+* Replace
+* Deactivate
+
+must require confirmation.
+
+⸻
+
+35. FRONTEND DATA LAYER
+
+Even though Phase 1 uses mock data:
+
+DO NOT hardcode data directly inside every page.
+
+Create a clean data/service layer so later it can be replaced with real APIs.
+
+For example conceptually:
+
+UI
+ ↓
+Service/API layer
+ ↓
+Mock data initially
+ ↓
+MongoDB API later
+
+This should minimize frontend rewrites.
+
+⸻
+
+36. MONGODB DATA MODEL PREPARATION
+
+Even during frontend-first development, structure the application around the final entities:
+
+organizations
+users
+locations
+sub_locations
+nvrs
+dvrs
+hdds
+combos
+cameras
+camera_locations
+daily_statuses
+failure_incidents
+replacements
+audit_logs
+status_options
+
+Do not actually connect the frontend to MongoDB during Phase 1 unless specifically instructed.
+
+⸻
+
+37. FUTURE DATABASE RELATIONSHIPS
+
+Conceptually:
+
+Organization
+    ↓
+Location
+    ↓
+Sub-location
+    ↓
+Combo
+    ├── NVR/DVR
+    ├── HDD
+    └── Cameras
+            ↓
+      Physical Location
+
+And:
+
+Camera
+    ↓
+Daily Status
+    ↓
+Failure Incident
+    ↓
+Recovery
+
+And:
+
+Asset
+    ↓
+Replacement History
+
+⸻
+
+38. DO NOT IMPLEMENT AUTOMATIC CCTV MONITORING NOW
+
+The future system may connect to:
+
+* NVR API
+* ONVIF
+* SNMP
+* Network monitoring
+* Vendor-specific APIs
+
+But this is FUTURE functionality.
+
+For now:
+
+Manual status
+
+must be implemented first.
+
+⸻
+
+39. SECURITY
+
+Even during frontend development, design the application around secure authentication.
+
+When backend integration begins:
+
+* Passwords must be hashed.
+* Authentication must be server-side.
+* Sessions/tokens must be securely managed.
+* Role checks must happen on the server.
+* Organization isolation must happen on the server.
+* CSRF protection where applicable.
+* Input validation.
+* Rate limiting for authentication endpoints.
+* Secure password reset.
+* Secure logout.
+* No secrets in frontend.
+* No sensitive credentials in Git.
+* No client-side-only authorization.
+
+⸻
+
+40. LOCAL DEVELOPMENT
+
+The final project must be runnable independently of Replit.
+
+Provide:
+
+.env.example
+README.md
+Installation instructions
+Database setup instructions
+Development commands
+Production build instructions
+
+The README must explain how to configure MongoDB Atlas.
+
+Do not make the application dependent on Replit-specific services.
+
+⸻
+
+41. FRONTEND PHASE ACCEPTANCE CRITERIA
+
+Do not declare the frontend complete until:
+
+* Login page exists
+* Registration/invitation page exists
+* Dashboard exists
+* Role-specific navigation exists
+* Location pages exist
+* Sub-location pages exist
+* NVR pages exist
+* DVR pages exist
+* HDD pages exist
+* Combo pages exist
+* CCTV pages exist
+* Daily transaction UI exists
+* Failure UI exists
+* Replacement history UI exists
+* Reports UI exists
+* Users UI exists
+* Settings UI exists
+* Search/filter interfaces exist
+* Empty states exist
+* Loading states exist
+* Error states exist
+* Responsive behavior works
+* Role-based UI visibility works
+* UI is visually consistent
+* No major placeholder screens remain
+
+⸻
+
+42. IMPORTANT: DO NOT OVERUSE REPLIT CREDITS
+
+Work efficiently.
+
+Before creating a new component:
+
+* Check whether an existing component can be reused.
+* Check existing styles.
+* Avoid duplicate implementations.
+* Avoid unnecessary packages.
+* Avoid unnecessary AI-generated boilerplate.
+* Do not regenerate already-working pages.
+* Do not repeatedly rewrite the same files.
+
+Prefer:
+
+Reusable components
++
+Reusable layouts
++
+Reusable forms
++
+Reusable tables
++
+Reusable modals
++
+Centralized styles
+
+over creating separate duplicated implementations.
+
+⸻
+
+43. DO NOT USE FAKE IMPLEMENTATION AS FINAL
+
+During Phase 1, mock data is acceptable.
+
+But clearly structure it as temporary frontend data.
+
+Do NOT create fake buttons that appear functional but do nothing without documenting them.
+
+For example:
+
+If “Export Report” is frontend-only:
+
+UI prepared for export
+Backend export pending Phase 2
+
+Do not pretend the feature is already production-ready.
+
+⸻
+
+44. FINAL EXECUTION ORDER
+
+Follow exactly:
+
+STEP 1
+
+Scan existing repository.
+
+STEP 2
+
+Understand existing Laravel structure.
+
+STEP 3
+
+Compare existing pages against the uploaded screenshots.
+
+STEP 4
+
+Create/update reusable design system.
+
+STEP 5
+
+Create/update application shell.
+
+STEP 6
+
+Build authentication UI.
+
+STEP 7
+
+Build role-specific dashboards.
+
+STEP 8
+
+Build all infrastructure pages.
+
+STEP 9
+
+Build CCTV operations pages.
+
+STEP 10
+
+Build history/replacement/report pages.
+
+STEP 11
+
+Make everything responsive.
+
+STEP 12
+
+Test frontend navigation and UI flows.
+
+STEP 13
+
+Remove obvious placeholders and inconsistencies.
+
+STEP 14
+
+Stop.
+
+Report:
+
+FRONTEND PHASE COMPLETE
+Completed:
+...
+Remaining backend work:
+...
+MongoDB integration:
+NOT STARTED / PREPARED
+Authentication backend:
+NOT STARTED / PREPARED
+Next recommended phase:
+BACKEND + MONGODB + SECURE AUTHENTICATION
+
+Do NOT proceed to backend until I explicitly instruct you.
+
+⸻
+
+FINAL PRINCIPLE
+
+The application should eventually become:
+
+                    CAMOPS
+                       │
+       ┌───────────────┼────────────────┐
+       │               │                │
+Infrastructure     Operations        Reporting
+       │               │                │
+ NVR/DVR/HDD       Daily Status      Reports
+       │               │                │
+     Combo          Failures        History
+       │               │                │
+    Cameras          Recovery       Replacements
+       │
+Physical Location
+
+Build the frontend foundation first, using the uploaded screenshots as visual references and the business requirements as the source of truth.
+
+Do not rush into backend implementation.
+
+Do not change the project into a different framework if the existing Laravel project is usable.
+
+Start by scanning the repository and then begin Phase 1.

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CamOps"
+description = "A professional CCTV infrastructure and operational tracking system for managing locations, NVRs, DVRs, HDDs, camera assets, daily status operations, failures, replacements, reports, users, and settings with role-aware frontend workflows using temporary mock data."
+version = "1.0.0"
+id = "artifacts/camops"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21573
+
+[services.development]
+run = "pnpm --filter @workspace/camops run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/camops", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/camops/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21573"
+BASE_PATH = "/"
