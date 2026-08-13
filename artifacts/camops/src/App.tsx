@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Link, Router as WouterRouter, useLocation } from "wouter";
+import { getCurrentSessionUser, loginWithEmail, logOutSession, registerAccount, type SessionUser } from "@/lib/auth-client";
 import {
   Activity, AlertTriangle, ArrowRight, Bell, Building2, CalendarDays, Camera, Check, CheckCheck, CheckCircle2,
   ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudDownload, Database, Eye, EyeOff, FileText,
@@ -76,32 +77,36 @@ function EmptyState({ title, body, onAction }: { title: string; body: string; on
   return <div className="empty-state"><div className="empty-mark"><Radio size={22} /></div><h3>{title}</h3><p>{body}</p>{onAction && <Button onClick={onAction}><Plus size={15} /> Add first record</Button>}</div>;
 }
 
-function Shell({ role, setRole, children, notify }: { role: Role; setRole: (role: Role) => void; children: ReactNode; notify: (notice: Notice) => void }) {
+function Shell({ user, onLogout, children, notify }: { user: SessionUser; onLogout: () => void; children: ReactNode; notify: (notice: Notice) => void }) {
   const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const roleOrg = role === "Super Admin" ? "All organizations" : role === "Operator" ? "Northstar · Central Campus" : "Northstar Transit Authority";
-  return <div className="camops-shell noise min-h-[100dvh]">
+  const role = user.role;
+  const roleLabel = role === "SUPER_ADMIN" ? "Super Admin" : role === "ADMIN" ? "Admin" : "Operator";
+  const roleOrg = role === "SUPER_ADMIN" ? "All organizations" : role === "OPERATOR" ? "Northstar · Central Campus" : user.organizationName ?? "Northstar Transit Authority";
+  const initials = user.name.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase() ?? "").join("") || "US";
+  return <div className="camops-shell noise min-h-dvh">
     <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
       <div className="brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div><button className="mobile-close icon-btn" onClick={() => setMobileOpen(false)}><X size={18} /></button></div>
       <div className="org-switch"><div className="org-switch-icon"><Building2 size={16} /></div><div><small>Workspace</small><strong>{roleOrg}</strong></div><ChevronDown size={14} /></div>
-      <nav className="nav">{navGroups.filter(group => role !== "Operator" || group.label !== "Administration").map(group => <div className="nav-group" key={group.label}><span className="nav-label">{group.label}</span>{group.items.map(item => { const active = location === item.href; return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`nav-item ${active ? "nav-active" : ""}`} data-testid={`link-${item.label.toLowerCase().replaceAll(" ", "-")}`}><item.icon size={16} /><span>{item.label}</span>{item.label === "Active failures" && <b className="nav-count">3</b>}</Link>; })}</div>)}</nav>
+      <nav className="nav">{navGroups.filter(group => roleLabel !== "Operator" || group.label !== "Administration").map(group => <div className="nav-group" key={group.label}><span className="nav-label">{group.label}</span>{group.items.map(item => { const active = location === item.href; return <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`nav-item ${active ? "nav-active" : ""}`} data-testid={`link-${item.label.toLowerCase().replaceAll(" ", "-")}`}><item.icon size={16} /><span>{item.label}</span>{item.label === "Active failures" && <b className="nav-count">3</b>}</Link>; })}</div>)}</nav>
       <div className="sidebar-footer"><div className="system-status"><span className="live-dot" /><div><strong>All systems monitored</strong><small>Last sync 2 min ago</small></div></div><div className="sidebar-footer-row"><span className="mono">PHASE 1.0</span><span className="sidebar-version">NTA / 03</span></div></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu icon-btn" onClick={() => setMobileOpen(true)}><Menu size={19} /></button><div className="breadcrumb"><span>CamOps</span><ChevronRight size={14} /><strong>{location === "/dashboard" ? "Overview" : location.split("/").filter(Boolean).map(x => x.replaceAll("-", " ")).join(" / ")}</strong></div><div className="topbar-actions"><div className={`global-search ${searchOpen ? "search-expanded" : ""}`}><Search size={16} /><input data-testid="input-global-search" onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 120)} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} placeholder="Search CamOps" /><kbd>⌘ K</kbd></div><button data-testid="button-notifications" className="icon-btn notification-btn" onClick={() => notify({ tone: "info", message: "No new critical notifications. You are all caught up." })}><Bell size={17} /><i /></button><div className="account-wrap"><button data-testid="button-account-menu" className="account-button" onClick={() => setAccountOpen(!accountOpen)}><span className="avatar">MC</span><span className="account-copy"><strong>Maya Chen</strong><small>{role}</small></span><ChevronDown size={14} /></button>{accountOpen && <div className="account-menu page-enter"><div className="account-menu-head"><span className="avatar avatar-large">MC</span><div><strong>Maya Chen</strong><small>Demo account</small></div></div><div className="role-label">Switch demo role</div>{(["Super Admin", "Admin", "Operator"] as Role[]).map(option => <button key={option} data-testid={`button-role-${option.toLowerCase().replace(" ", "-")}`} className={`role-option ${role === option ? "role-selected" : ""}`} onClick={() => { setRole(option); setAccountOpen(false); notify({ tone: "success", message: `Viewing CamOps as ${option}.` }); }}><span className="role-pip" />{option}{role === option && <Check size={14} />}</button>)}<div className="menu-divider" /><button className="menu-link" onClick={() => notify({ tone: "info", message: "Sign out is disabled in the demo workspace." })}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+      <header className="topbar"><button className="mobile-menu icon-btn" onClick={() => setMobileOpen(true)}><Menu size={19} /></button><div className="breadcrumb"><span>CamOps</span><ChevronRight size={14} /><strong>{location === "/dashboard" ? "Overview" : location.split("/").filter(Boolean).map(x => x.replaceAll("-", " ")).join(" / ")}</strong></div><div className="topbar-actions"><div className={`global-search ${searchOpen ? "search-expanded" : ""}`}><Search size={16} /><input data-testid="input-global-search" onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 120)} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} placeholder="Search CamOps" /><kbd>⌘ K</kbd></div><button data-testid="button-notifications" className="icon-btn notification-btn" onClick={() => notify({ tone: "info", message: "No new critical notifications. You are all caught up." })}><Bell size={17} /><i /></button><div className="account-wrap"><button data-testid="button-account-menu" className="account-button" onClick={() => setAccountOpen(!accountOpen)}><span className="avatar">{initials}</span><span className="account-copy"><strong>{user.name}</strong><small>{roleLabel}</small></span><ChevronDown size={14} /></button>{accountOpen && <div className="account-menu page-enter"><div className="account-menu-head"><span className="avatar avatar-large">{initials}</span><div><strong>{user.name}</strong><small>{user.organizationName ?? "Workspace account"}</small></div></div><div className="role-label">Signed in as</div><div className="role-option role-selected"><span className="role-pip" />{roleLabel}{role === "SUPER_ADMIN" || role === "ADMIN" ? <Check size={14} /> : null}</div><div className="menu-divider" /><button className="menu-link" onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
       <div className="content">{children}</div>
     </main>
   </div>;
 }
 
-function Dashboard({ role, notify }: { role: Role; notify: (notice: Notice) => void }) {
+function Dashboard({ userName, role, notify }: { userName: string; role: Role; notify: (notice: Notice) => void }) {
   const [showAll, setShowAll] = useState(false);
+  const firstName = userName.split(" ").filter(Boolean)[0] ?? "Operator";
   const scope = role === "Super Admin" ? "System posture" : role === "Operator" ? "Your assigned run" : "Northstar Transit Authority";
   return <div className="page-enter">
-    <PageHeader eyebrow={`Good morning, Maya · ${scope}`} title={role === "Operator" ? "Keep the signal clean." : "Operations at a glance."} description="A live read on the assets, locations, and work that need your attention today." action={<div className="date-chip"><CalendarDays size={15} /><span>Friday, 15 March 2025</span></div>} />
+    <PageHeader eyebrow={`Good morning, ${firstName} · ${scope}`} title={role === "Operator" ? "Keep the signal clean." : "Operations at a glance."} description="A live read on the assets, locations, and work that need your attention today." action={<div className="date-chip"><CalendarDays size={15} /><span>Friday, 15 March 2025</span></div>} />
     <div className="metric-grid"><MetricCard label="Operational posture" value="94.8%" detail="+1.2% from yesterday" icon={Activity} tone="teal" /><MetricCard label="Assets monitored" value={role === "Super Admin" ? "1,284" : "428"} detail="Across 12 active locations" icon={Camera} tone="amber" /><MetricCard label="Open failures" value="03" detail="1 critical · 2 aging" icon={AlertTriangle} tone="red" /><MetricCard label="Today's confirmations" value="87%" detail="32 of 37 operators checked in" icon={ClipboardCheck} tone="slate" /></div>
     <div className="dashboard-grid">
       <section className="panel posture-panel page-enter stagger-1"><div className="panel-head"><div><p className="eyebrow">NETWORK POSTURE</p><h2>Signal health by location</h2></div><Link href="/locations" className="text-link">View locations <ArrowRight size={14} /></Link></div><div className="health-list">{[["Central Control Campus", "99.1%", "38 / 38 online", "healthy"], ["East Junction Station", "91.4%", "62 / 68 online", "warning"], ["Harbor Operations Center", "96.8%", "24 / 25 online", "healthy"], ["Westline Utilities", "88.2%", "19 / 22 online", "danger"]].slice(0, showAll ? 4 : 3).map(([name, score, sub, tone], index) => <div className="health-row" key={name}><div className="health-index mono">0{index + 1}</div><div className="health-name"><strong>{name}</strong><span>{sub}</span></div><div className="health-bar"><span className={`bar-${tone}`} style={{ width: score }} /></div><strong className="health-score mono">{score}</strong><ChevronRight size={15} className="health-chevron" /></div>)}</div><button className="show-more" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "Show all locations"} <ChevronDown size={14} className={showAll ? "rotate-180" : ""} /></button></section>
@@ -162,9 +167,10 @@ function ReportsPage({ notify }: { notify: (notice: Notice) => void }) {
   return <div className="page-enter"><PageHeader eyebrow="REPORTING / PREPARED" title="Reports workspace" description="Shape the view your organization needs. Export delivery is prepared for Phase 2." /><div className="report-layout"><section className="panel report-builder"><div className="panel-head"><div><p className="eyebrow">BUILD A REPORT</p><h2>Choose a lens</h2></div><span className="phase-tag">PHASE 2 EXPORT</span></div><div className="report-options">{reportOptions.map(([label, IconComponent, desc]) => <button key={label} className={`report-option ${report === label ? "selected" : ""}`} onClick={() => setReport(label)}><span className="report-option-icon"><IconComponent size={17} /></span><span><strong>{label}</strong><small>{desc}</small></span>{report === label && <Check size={15} />}</button>)}</div><div className="form-grid mt-6"><SelectField label="Date range" value={range} onChange={setRange} options={["Current shift", "Today", "Last 7 days", "This month"]} /><SelectField label="Organization" value="Northstar Transit Authority" options={["Northstar Transit Authority", "All organizations"]} /></div><div className="report-preview"><div><span className="preview-kicker">PREVIEW</span><strong>{report}</strong><span>{range} · Northstar Transit Authority</span></div><div className="preview-bars"><i /><i /><i /><i /><i /><i /><i /></div></div><Button className="mt-5" onClick={() => notify({ tone: "info", message: "Report filters saved. Export delivery is prepared for Phase 2." })}><CloudDownload size={15} /> Prepare export</Button></section><aside className="panel report-side"><div className="prepared-stamp"><FileText size={21} /><span>PHASE 2</span></div><h3>Export delivery is on the runway.</h3><p>Filtering, preview, and report definitions are ready now. CSV and PDF delivery will be connected in Phase 2.</p><div className="aside-rule" /><div className="aside-stat"><span>Report definitions</span><strong>04 ready</strong></div><div className="aside-stat"><span>Last generated</span><strong>14 Mar · 17:30</strong></div></aside></div></div>;
 }
 
-function SettingsPage({ role, notify }: { role: Role; notify: (notice: Notice) => void }) {
+function SettingsPage({ user, role, notify }: { user: SessionUser; role: Role; notify: (notice: Notice) => void }) {
   const [saved, setSaved] = useState(false);
-  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / SETTINGS" title="Settings" description="Tune your account and the operational vocabulary used across this workspace." /><div className="settings-layout"><aside className="settings-nav"><button className="active"><UserRound size={15} />Profile</button><button><KeyRound size={15} />Password</button><button><AlertTriangle size={15} />Failure reasons</button>{role !== "Operator" && <><button><SlidersHorizontal size={15} />Status options</button><button><Building2 size={15} />Organization settings</button></>}</aside><section className="panel settings-panel"><p className="eyebrow">PROFILE / ACCOUNT</p><h2>How the desk knows you</h2><div className="profile-hero"><span className="avatar avatar-xl">MC</span><div><h3>Maya Chen</h3><p>Operations administrator · Northstar Transit Authority</p><button className="text-link" onClick={() => notify({ tone: "info", message: "Avatar upload is prepared for a later API connection." })}>Change avatar <ArrowRight size={14} /></button></div></div><div className="form-grid"><Field label="Display name" value="Maya Chen" /><Field label="Email address" value="maya.chen@northstar.gov" /><SelectField label="Time zone" value="UTC−05:00 · Eastern" options={["UTC−05:00 · Eastern", "UTC−06:00 · Central", "UTC · London"]} /><SelectField label="Default landing page" value="Dashboard" options={["Dashboard", "Daily operations", "Active failures"]} /></div><div className="settings-save"><span>{saved ? <><CheckCircle2 size={15} />Changes saved just now</> : "Changes are stored in the Phase 1 mock service."}</span><Button onClick={() => { setSaved(true); notify({ tone: "success", message: "Profile settings saved." }); }}>{saved ? "Saved" : "Save changes"} <Check size={15} /></Button></div></section></div></div>;
+  const initials = user.name.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase() ?? "").join("") || "US";
+  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / SETTINGS" title="Settings" description="Tune your account and the operational vocabulary used across this workspace." /><div className="settings-layout"><aside className="settings-nav"><button className="active"><UserRound size={15} />Profile</button><button><KeyRound size={15} />Password</button><button><AlertTriangle size={15} />Failure reasons</button>{role !== "Operator" && <><button><SlidersHorizontal size={15} />Status options</button><button><Building2 size={15} />Organization settings</button></>}</aside><section className="panel settings-panel"><p className="eyebrow">PROFILE / ACCOUNT</p><h2>How the desk knows you</h2><div className="profile-hero"><span className="avatar avatar-xl">{initials}</span><div><h3>{user.name}</h3><p>{role === "Operator" ? "Operations user" : role === "Admin" ? "Operations administrator" : "System administrator"} · {user.organizationName ?? "Workspace"}</p><button className="text-link" onClick={() => notify({ tone: "info", message: "Avatar upload is prepared for a later API connection." })}>Change avatar <ArrowRight size={14} /></button></div></div><div className="form-grid"><Field label="Display name" value={user.name} /><Field label="Email address" value={user.email} /><SelectField label="Time zone" value="UTC−05:00 · Eastern" options={["UTC−05:00 · Eastern", "UTC−06:00 · Central", "UTC · London"]} /><SelectField label="Default landing page" value="Dashboard" options={["Dashboard", "Daily operations", "Active failures"]} /></div><div className="settings-save"><span>{saved ? <><CheckCircle2 size={15} />Changes saved just now</> : "Changes are stored in the Phase 1 mock service."}</span><Button onClick={() => { setSaved(true); notify({ tone: "success", message: "Profile settings saved." }); }}>{saved ? "Saved" : "Save changes"} <Check size={15} /></Button></div></section></div></div>;
 }
 
 function AuditPage() {
@@ -173,24 +179,87 @@ function AuditPage() {
   return <div className="page-enter"><PageHeader eyebrow="SYSTEM / READ ONLY" title="Audit logs" description="A durable, read-only account of changes made across the operations desk." action={<Button variant="secondary"><Download size={15} /> Phase 2 export</Button>} /><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} placeholder="Search user, entity, action, or ID…" /><div className="table-scroll"><table className="data-table"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Previous</th><th>New value</th></tr></thead><tbody>{filtered.map(log => <tr key={log.id}><td className="mono">{log.dateTime}</td><td><div className="table-primary"><span className="avatar avatar-sm">{log.user.split(" ").map(x => x[0]).join("")}</span><strong>{log.user}</strong></div></td><td><span className="action-tag">{log.action}</span></td><td><strong>{log.entity}</strong><small className="block text-muted mono">{log.entityId}</small></td><td className="text-muted">{log.previousValue}</td><td><strong>{log.newValue}</strong></td></tr>)}</tbody></table></div></section></div>;
 }
 
-function AuthPage({ register = false }: { register?: boolean }) {
+function AuthPage({ register = false, onAuthenticated }: { register?: boolean; onAuthenticated: (user: SessionUser) => void }) {
   const [, setLocation] = useLocation();
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const submit = () => { setLoading(true); setError(""); setTimeout(() => { setLoading(false); if (register) setLocation("/login"); else { setError("We couldn't verify those credentials. Check your email and password, then try again."); } }, 800); };
-  return <div className="auth-page noise"><div className="auth-art"><div className="auth-art-inner"><div className="brand brand-light"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-quote"><span className="eyebrow">CONTROL THE SIGNAL</span><h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1><p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p></div><div className="auth-art-foot"><span className="mono">NORTHSTAR / CONTROL ROOM</span><span>PHASE 1 PREVIEW</span></div></div></div><div className="auth-form-side"><div className="auth-form-wrap"><div className="mobile-auth-brand brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-heading"><p className="eyebrow">{register ? "INVITATION / ACCOUNT SETUP" : "SECURE ACCESS / 01"}</p><h2 className="display">{register ? "Set up your desk access." : "Welcome back, Maya."}</h2><p>{register ? "Your invitation controls your organization and access level. Elevated roles can only be assigned by an administrator." : "Sign in to continue to the Northstar operations desk."}</p></div>{error && <div className="auth-error"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={14} /></button></div>}<div className="auth-fields">{register && <Field label="Invitation code" placeholder="Paste your invitation code" />}<Field label="Work email" placeholder="name@organization.gov" /><label className="field"><span>Password</span><div className="password-wrap"><input data-testid="input-password" type={show ? "text" : "password"} placeholder="Enter your password" /><button type="button" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>{register && <Field label="Confirm password" type="password" placeholder="Repeat your password" />}</div>{!register && <div className="auth-options"><label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label><button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button></div>}<Button className="auth-submit" onClick={submit} disabled={loading}>{loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}{!loading && <ArrowRight size={16} />}</Button>{!register ? <p className="auth-switch">Need an invited account? <Link href="/register">Set up access <ArrowRight size={14} /></Link></p> : <p className="auth-switch">Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link></p>}<p className="auth-footnote"><LockKeyhole size={13} /> Demo workspace · no production credentials accepted</p></div></div></div>;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [organizationCode, setOrganizationCode] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const submit = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      if (register) {
+        const payload = { name, email, password, confirmPassword, organizationCode };
+        await registerAccount(payload);
+        setLocation("/login");
+        return;
+      }
+      const user = await loginWithEmail(email, password);
+      onAuthenticated(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "We couldn't verify those credentials. Check your email and password, then try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return <div className="auth-page noise"><div className="auth-art"><div className="auth-art-inner"><div className="brand brand-light"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-quote"><span className="eyebrow">CONTROL THE SIGNAL</span><h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1><p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p></div><div className="auth-art-foot"><span className="mono">NORTHSTAR / CONTROL ROOM</span><span>PHASE 1 PREVIEW</span></div></div></div><div className="auth-form-side"><div className="auth-form-wrap"><div className="mobile-auth-brand brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-heading"><p className="eyebrow">{register ? "INVITATION / ACCOUNT SETUP" : "SECURE ACCESS / 01"}</p><h2 className="display">{register ? "Set up your desk access." : "Welcome back."}</h2><p>{register ? "Your invitation controls your organization and access level. Elevated roles can only be assigned by an administrator." : "Sign in to continue to your operations desk."}</p></div>{error && <div className="auth-error"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={14} /></button></div>}<div className="auth-fields">{register && <><Field label="Full name" placeholder="Your full name" value={name} onChange={setName} /><Field label="Invitation code" placeholder="Paste your invitation code" value={organizationCode} onChange={setOrganizationCode} /></> }<Field label="Work email" placeholder="name@organization.gov" value={email} onChange={setEmail} /><label className="field"><span>Password</span><div className="password-wrap"><input data-testid="input-password" type={show ? "text" : "password"} placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} /><button type="button" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>{register && <Field label="Confirm password" type="password" placeholder="Repeat your password" value={confirmPassword} onChange={setConfirmPassword} />}</div>{!register && <div className="auth-options"><label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label><button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button></div>}<Button className="auth-submit" onClick={submit} disabled={loading}>{loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}{!loading && <ArrowRight size={16} />}</Button>{!register ? <p className="auth-switch">Need an invited account? <Link href="/register">Set up access <ArrowRight size={14} /></Link></p> : <p className="auth-switch">Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link></p>}<p className="auth-footnote"><LockKeyhole size={13} /> Demo workspace · no production credentials accepted</p></div></div></div>;
 }
 
 function RoutedApp() {
-  const [location] = useLocation();
-  const [role, setRole] = useState<Role>(currentUser.role);
+  const [location, setLocation] = useLocation();
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const notify = (next: Notice) => { setNotice(next); setTimeout(() => setNotice(null), 3600); };
-  if (location === "/login") return <AuthPage />;
-  if (location === "/register") return <AuthPage register />;
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        const sessionUser = await getCurrentSessionUser();
+        if (sessionUser) setUser(sessionUser);
+      } catch {
+        setUser(null);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    void bootstrap();
+  }, []);
+
+  const handleAuthenticated = (nextUser: SessionUser) => {
+    setUser(nextUser);
+    setLocation("/dashboard");
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logOutSession();
+    } finally {
+      setUser(null);
+      setLocation("/login");
+    }
+  };
+
+  if (loadingUser) {
+    return <div className="auth-page noise"><div className="auth-form-side"><div className="auth-form-wrap"><p className="eyebrow">LOADING</p><h2 className="display">Checking your session…</h2></div></div></div>;
+  }
+
+  if (!user && location !== "/login" && location !== "/register") {
+    setLocation("/login");
+    return null;
+  }
+
+  if (location === "/login") return <AuthPage onAuthenticated={handleAuthenticated} />;
+  if (location === "/register") return <AuthPage register onAuthenticated={handleAuthenticated} />;
+
+  const role = user ? (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "ADMIN" ? "Admin" : "Operator") : "Operator";
   let page: ReactNode;
-  if (location === "/" || location === "/dashboard") page = <Dashboard role={role} notify={notify} />;
+  if (location === "/" || location === "/dashboard") page = <Dashboard userName={user?.name ?? "Operator"} role={role} notify={notify} />;
   else if (location === "/locations") page = <ResourcePage kind="locations" eyebrow="INFRASTRUCTURE / TOPOLOGY" title="Locations" description="Keep every site and sub-location legible to the people on shift." notify={notify} />;
   else if (location === "/infrastructure/nvrs") page = <ResourcePage kind="nvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="NVR register" description="Network video recorders, channel capacity, and placement in one dependable register." notify={notify} />;
   else if (location === "/infrastructure/dvrs") page = <ResourcePage kind="dvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="DVR register" description="Track legacy recording assets with the same operational discipline." notify={notify} />;
@@ -202,10 +271,10 @@ function RoutedApp() {
   else if (location === "/operations/failures") page = <FailuresPage notify={notify} />;
   else if (location === "/lifecycle/replacements") page = <ReplacementsPage notify={notify} />;
   else if (location === "/reports") page = <ReportsPage notify={notify} />;
-  else if (location === "/settings") page = <SettingsPage role={role} notify={notify} />;
+  else if (location === "/settings") page = <SettingsPage user={user!} role={role} notify={notify} />;
   else if (location === "/audit-logs") page = <AuditPage />;
   else page = <NotFound />;
-  return <Shell role={role} setRole={setRole} notify={notify}>{page}{notice && <div className={`toast-notice toast-${notice.tone}`}><span>{notice.tone === "success" ? <CheckCircle2 size={17} /> : notice.tone === "error" ? <AlertTriangle size={17} /> : <Bell size={17} />}</span><strong>{notice.message}</strong><button onClick={() => setNotice(null)}><X size={14} /></button></div>}</Shell>;
+  return <Shell user={user!} onLogout={handleLogout} notify={notify}>{page}{notice && <div className={`toast-notice toast-${notice.tone}`}><span>{notice.tone === "success" ? <CheckCircle2 size={17} /> : notice.tone === "error" ? <AlertTriangle size={17} /> : <Bell size={17} />}</span><strong>{notice.message}</strong><button onClick={() => setNotice(null)}><X size={14} /></button></div>}</Shell>;
 }
 
 function App() {
