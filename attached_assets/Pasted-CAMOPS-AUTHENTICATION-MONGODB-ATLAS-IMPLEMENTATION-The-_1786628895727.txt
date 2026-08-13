@@ -1,0 +1,1231 @@
+CAMOPS — AUTHENTICATION + MONGODB ATLAS IMPLEMENTATION
+
+The frontend of CamOps — CCTV Infrastructure & Operational Tracking System is now almost complete.
+
+I want you to move to the next development phase:
+
+BACKEND + MONGODB ATLAS + SECURE AUTHENTICATION
+
+Do NOT rebuild the existing frontend.
+
+Do NOT redesign the existing dashboard.
+
+Do NOT remove or break existing pages.
+
+Use the existing frontend as the UI foundation and connect it to real authentication and database functionality.
+
+⸻
+
+1. FIRST: INSPECT THE EXISTING PROJECT
+
+Before changing anything:
+
+1. Scan the entire repository.
+2. Identify the current frontend framework.
+3. Identify the current backend/framework, if any.
+4. Inspect the existing routes.
+5. Inspect the existing components/pages.
+6. Inspect the current Settings page.
+7. Inspect the current user/profile UI.
+8. Inspect package dependencies.
+9. Inspect environment configuration.
+10. Check whether any authentication already exists.
+11. Check whether any database connection already exists.
+12. Check whether mock/demo user switching exists.
+13. Check how the current frontend stores user state.
+
+Do NOT blindly replace existing code.
+
+Reuse the existing architecture wherever practical.
+
+⸻
+
+2. CURRENT FRONTEND MUST REMAIN
+
+The existing CamOps UI is already substantially built.
+
+Keep the existing:
+
+* Sidebar
+* Header
+* Dashboard
+* Navigation
+* Infrastructure pages
+* CCTV pages
+* Transactions/Operations pages
+* Failure pages
+* Replacement pages
+* Reports
+* Users
+* Settings
+* Design system
+* Responsive layout
+
+Only modify screens where authentication integration requires it.
+
+The existing visual design should remain consistent.
+
+⸻
+
+3. DATABASE
+
+Use:
+
+MongoDB Atlas
+
+MongoDB Atlas must become the real persistent database.
+
+Do NOT use:
+
+* local JSON files
+* browser localStorage as the database
+* hardcoded users
+* fake in-memory users
+* temporary arrays as production storage
+
+Mock data may remain temporarily for modules that have not yet been connected, but authentication MUST use the real MongoDB database.
+
+⸻
+
+4. ENVIRONMENT VARIABLES
+
+Use environment variables for all secrets.
+
+Create/update:
+
+.env.example
+
+Example structure:
+
+MONGODB_URI=
+MONGODB_DATABASE=
+SESSION_SECRET=
+APP_URL=
+
+Use the appropriate environment variables for the actual framework.
+
+IMPORTANT:
+
+* Never hardcode MongoDB credentials.
+* Never hardcode passwords.
+* Never expose MongoDB credentials to frontend JavaScript.
+* Never commit .env.
+* Never print secret values in logs.
+* Never expose database connection strings through API responses.
+
+⸻
+
+5. AUTHENTICATION SYSTEM
+
+Implement real authentication.
+
+Required functionality:
+
+* Login
+* Logout
+* Registration/account creation
+* Password hashing
+* Password validation
+* Session/token management
+* Protected routes
+* Role-based authorization
+* Organization-level authorization
+* Current-user endpoint/state
+* Authentication persistence
+* Unauthorized handling
+
+Use the authentication mechanism that is appropriate for the existing application architecture.
+
+Prefer secure server-managed sessions / HTTP-only secure cookies where appropriate.
+
+Do NOT store raw passwords.
+
+Do NOT store authentication secrets in localStorage unless there is a compelling architectural reason.
+
+⸻
+
+6. THREE ROLES
+
+Implement exactly these three application roles:
+
+SUPER_ADMIN
+ADMIN
+OPERATOR
+
+Do not create additional application roles unless absolutely necessary.
+
+⸻
+
+7. ROLE RESPONSIBILITIES
+
+SUPER ADMIN
+
+Global system administrator.
+
+Can:
+
+* Manage organizations
+* Create/manage Admin accounts
+* View all organizations
+* Manage system-wide settings
+* Manage users
+* View audit logs
+* View system-wide reports
+* Access all infrastructure data
+
+Super Admin is NOT restricted to one organization.
+
+⸻
+
+ADMIN
+
+Organization-level administrator.
+
+Can manage the organization assigned to them:
+
+* Locations
+* Sub-locations
+* NVRs
+* DVRs
+* HDDs
+* Combos
+* CCTV cameras
+* Operators
+* Operational records
+* Replacements
+* Reports
+
+Admin must NOT access another organization’s data.
+
+⸻
+
+OPERATOR
+
+Operational user.
+
+Can:
+
+* Login
+* View permitted infrastructure
+* View locations
+* View sub-locations
+* View assigned/authorized combos
+* View cameras
+* Perform daily status transactions
+* Mark status
+* Select predefined failure reasons
+* Add remarks
+* Record recovery/fix status
+* View permitted operational history
+
+Operator must NOT:
+
+* Create Admin users
+* Create Super Admin users
+* Change their own role
+* Modify organization ownership
+* Delete system-critical records
+* Access unauthorized organizations
+* Modify security settings
+
+⸻
+
+8. VERY IMPORTANT — SECURE ROLE CREATION
+
+DO NOT create a public registration form where a visitor can choose:
+
+Super Admin
+Admin
+Operator
+
+That would allow privilege escalation.
+
+Instead implement secure role assignment.
+
+Super Admin
+
+The first Super Admin must be created through a secure bootstrap process.
+
+Possible approaches:
+
+* Initial setup command
+* Secure environment-based bootstrap
+* One-time setup page protected by a setup secret
+
+Choose the safest approach for the current stack and document it.
+
+⸻
+
+9. ADMIN CREATION
+
+Only a Super Admin can create an Admin.
+
+Example:
+
+Super Admin
+     ↓
+Create Admin
+     ↓
+Assign organization
+     ↓
+Admin account created
+     ↓
+Admin can login
+
+The Admin role must be assigned server-side.
+
+The Admin must never be able to change their own role to Super Admin.
+
+⸻
+
+10. OPERATOR CREATION
+
+Only an authorized Admin can create an Operator belonging to their organization.
+
+Example:
+
+Admin
+   ↓
+Create Operator
+   ↓
+Assign organization
+   ↓
+Operator account created
+   ↓
+Operator can login
+
+An Operator must not be able to change their own role.
+
+⸻
+
+11. REGISTRATION UI
+
+Create a professional CamOps registration/account setup experience.
+
+However, distinguish between:
+
+Public account registration
+
+and:
+
+Administrative user creation
+
+Do not expose privileged role creation publicly.
+
+If the application requires a public registration page, a safe default is:
+
+New account request
+        ↓
+Operator / pending account
+        ↓
+Admin approval
+        ↓
+Account activated
+
+Alternatively, if public registration is not required by the organization, use invitation-based account creation.
+
+Choose the more secure approach and explain the decision.
+
+⸻
+
+12. LOGIN PAGE
+
+Create/use the existing CamOps visual language.
+
+The login page should include:
+
+* CamOps logo/branding
+* Email/username
+* Password
+* Show/hide password
+* Remember me if appropriate
+* Forgot password
+* Login button
+* Loading state
+* Validation errors
+* Authentication error
+* Session handling
+
+Do not expose unnecessary information.
+
+For example, avoid revealing:
+
+“This email exists but the password is wrong.”
+
+Use an appropriate generic authentication error where necessary.
+
+⸻
+
+13. LOGIN FLOW
+
+Expected flow:
+
+User opens CamOps
+        ↓
+Authentication check
+        ↓
+Not authenticated?
+        ↓
+Login page
+        ↓
+Enter credentials
+        ↓
+Server validates
+        ↓
+Password verified
+        ↓
+Session created
+        ↓
+User role loaded
+        ↓
+Organization permissions loaded
+        ↓
+Redirect to appropriate dashboard
+
+⸻
+
+14. ROLE-BASED REDIRECTION
+
+After successful login:
+
+Super Admin
+
+Go to:
+
+/admin/dashboard
+
+or the existing appropriate dashboard route.
+
+Admin
+
+Go to the organization Admin dashboard.
+
+Operator
+
+Go to the Operator operations dashboard.
+
+Use the existing routing architecture where possible.
+
+⸻
+
+15. PROTECTED ROUTES
+
+Every authenticated page must be protected.
+
+Unauthenticated user:
+
+Protected page
+      ↓
+Redirect → Login
+
+Authenticated but unauthorized user:
+
+Protected page
+      ↓
+403 / Access Denied
+
+Do NOT rely only on frontend route hiding.
+
+Backend authorization is mandatory.
+
+⸻
+
+16. BACKEND AUTHORIZATION
+
+Every protected API/action must verify:
+
+1. Is the user authenticated?
+2. What role does the user have?
+3. What organization does the user belong to?
+4. Does the user have permission for this operation?
+5. Does the requested resource belong to the user’s organization?
+
+Example:
+
+Admin A
+Organization A
+tries to access:
+Camera belonging to Organization B
+
+The backend must reject the request.
+
+Do not rely on:
+
+?organizationId=...
+
+from the frontend as proof of authorization.
+
+Authorization must be determined server-side.
+
+⸻
+
+17. USER DATABASE MODEL
+
+Create a proper User collection/model.
+
+At minimum support:
+
+_id
+name
+email
+passwordHash
+role
+organizationId
+status
+createdAt
+updatedAt
+lastLoginAt
+
+Possible statuses:
+
+ACTIVE
+PENDING
+SUSPENDED
+DISABLED
+
+Do not store:
+
+password
+
+Store only a secure password hash.
+
+⸻
+
+18. ROLE VALIDATION
+
+Role must be an enum/validated value.
+
+Allowed:
+
+SUPER_ADMIN
+ADMIN
+OPERATOR
+
+Reject unknown role values.
+
+Do not trust a role supplied by the frontend.
+
+Example malicious request:
+
+{
+  "role": "SUPER_ADMIN"
+}
+
+must NOT allow a normal user to become Super Admin.
+
+⸻
+
+19. PASSWORD SECURITY
+
+Implement secure password handling.
+
+Requirements:
+
+* Strong password hashing
+* Password confirmation during creation
+* Password strength validation
+* Never log passwords
+* Never return password hashes through APIs
+* Never expose password hashes to frontend
+* Password reset mechanism should be secure
+* Rate-limit authentication attempts where appropriate
+
+Use a modern password hashing algorithm supported by the chosen backend framework.
+
+Do NOT implement your own hashing algorithm.
+
+⸻
+
+20. SESSION SECURITY
+
+Use secure authentication state.
+
+Where cookies/sessions are used:
+
+* HTTP-only
+* Secure in production
+* SameSite appropriately configured
+* Session expiration
+* Session invalidation on logout
+
+Protect against:
+
+* Session fixation
+* Session theft
+* CSRF where applicable
+
+⸻
+
+21. PASSWORD RESET
+
+Implement a secure forgot-password flow.
+
+Do NOT implement:
+
+Forgot password → show password
+
+Instead:
+
+Forgot password
+      ↓
+Enter email
+      ↓
+Secure reset token
+      ↓
+Time-limited reset link/token
+      ↓
+New password
+      ↓
+Invalidate reset token
+
+Do not reveal whether an email exists.
+
+If email delivery is not configured yet, create the backend architecture and development-safe mechanism without exposing sensitive reset information.
+
+⸻
+
+22. USER MANAGEMENT PAGE
+
+Connect the existing Users page to the real database.
+
+Super Admin should be able to:
+
+* View users
+* Create Admin
+* Edit Admin
+* Activate/deactivate users
+* View organization
+* Filter by role
+* Search users
+
+Admin should be able to:
+
+* View organization operators
+* Create Operator
+* Edit permitted operator details
+* Activate/deactivate operators
+
+Operator:
+
+* Cannot access user administration.
+
+⸻
+
+23. REMOVE DEMO ROLE SWITCHING
+
+The current frontend screenshot contains:
+
+SWITCH DEMO ROLE
+Super Admin
+Admin
+Operator
+
+This is acceptable for a frontend prototype but MUST NOT remain as a real production authentication mechanism.
+
+Replace it with actual authenticated user state.
+
+Do not allow users to simply click:
+
+Switch to Super Admin
+
+and gain privileges.
+
+The logged-in user’s actual database role must determine the UI.
+
+⸻
+
+24. CURRENT USER
+
+Create an authenticated current-user mechanism.
+
+The frontend should be able to retrieve something like:
+
+Current User
+Name
+Email
+Role
+Organization
+Permissions
+
+Use this to populate the existing profile menu.
+
+Example:
+
+Mihir
+Admin
+Organization Name
+
+Do not use hardcoded:
+
+Maya Chen
+Demo account
+
+after authentication is implemented.
+
+⸻
+
+25. SETTINGS PAGE
+
+Connect the existing Settings page to the real authenticated user.
+
+Profile section:
+
+* Name
+* Email
+* Role
+* Organization
+
+Password section:
+
+* Current password
+* New password
+* Confirm password
+
+The user should be able to change their own password.
+
+Role and organization must NOT be editable by ordinary users.
+
+⸻
+
+26. ORGANIZATION MODEL
+
+Create an Organization collection/model.
+
+Example:
+
+Organization
+    ↓
+Locations
+    ↓
+Sub-locations
+    ↓
+Infrastructure
+
+At minimum:
+
+_id
+name
+code
+status
+createdAt
+updatedAt
+
+Super Admin can manage organizations.
+
+Admin is associated with an organization.
+
+Operator is associated with an organization.
+
+⸻
+
+27. PREPARE THE EXISTING MODULES FOR REAL DATA
+
+The existing frontend contains modules for:
+
+* Locations
+* NVRs
+* DVRs
+* HDDs
+* Combos
+* CCTV
+* Transactions
+* Failures
+* Replacements
+* Reports
+* Users
+* Settings
+
+Do not rewrite their UI.
+
+Create/connect the backend APIs and MongoDB models progressively.
+
+⸻
+
+28. MONGODB COLLECTIONS
+
+Prepare the database architecture for:
+
+organizations
+users
+locations
+subLocations
+nvrs
+dvrs
+hdds
+combos
+cameras
+dailyStatuses
+failureIncidents
+replacements
+auditLogs
+statusOptions
+
+Use the actual framework/database conventions where appropriate.
+
+Do not create unnecessary collections if a better MongoDB design is justified.
+
+⸻
+
+29. ORGANIZATION ISOLATION
+
+Every organization-owned entity must be traceable to an organization.
+
+Examples:
+
+Location → organizationId
+SubLocation → organizationId
+NVR → organizationId
+DVR → organizationId
+HDD → organizationId
+Combo → organizationId
+Camera → organizationId
+
+The exact implementation can use references/derived relationships where appropriate, but organization isolation must be enforceable.
+
+⸻
+
+30. AUDIT LOGGING
+
+Authentication/security events should also be auditable where appropriate.
+
+Record events such as:
+
+LOGIN_SUCCESS
+LOGIN_FAILED
+LOGOUT
+PASSWORD_CHANGED
+USER_CREATED
+USER_DISABLED
+ROLE_CHANGED
+
+For business data later:
+
+CAMERA_CREATED
+CAMERA_UPDATED
+CAMERA_REPLACED
+STATUS_CHANGED
+NVR_REPLACED
+HDD_REPLACED
+
+Do not store passwords or authentication secrets in audit logs.
+
+⸻
+
+31. DATABASE INDEXING
+
+Create appropriate indexes.
+
+At minimum evaluate indexes for:
+
+users.email
+users.organizationId
+users.role
+organizations.code
+locations.organizationId
+cameras.organizationId
+cameras.serialNumber
+nvrs.organizationId
+nvrs.serialNumber
+dvrs.organizationId
+dvrs.serialNumber
+hdds.organizationId
+hdds.serialNumber
+
+Add additional indexes based on actual query patterns.
+
+Avoid unnecessary indexes.
+
+⸻
+
+32. DATA VALIDATION
+
+Validate on the backend.
+
+Examples:
+
+* Email format
+* Unique email
+* Valid role
+* Valid organization
+* Password requirements
+* Serial number uniqueness where required
+* Valid ObjectIds/references
+* Valid status
+* Valid permissions
+
+Frontend validation is helpful but NEVER sufficient by itself.
+
+⸻
+
+33. API SECURITY
+
+All protected API endpoints must verify authentication.
+
+Implement:
+
+* Authorization middleware
+* Input validation
+* Rate limiting where appropriate
+* Secure error responses
+* Proper HTTP status codes
+* No sensitive information in errors
+* No database credentials in responses
+
+⸻
+
+34. ERROR HANDLING
+
+Create consistent API error responses.
+
+Examples:
+
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+422 Validation Error
+500 Internal Server Error
+
+Do not expose stack traces in production.
+
+⸻
+
+35. MONGODB ATLAS CONNECTION TEST
+
+After configuration:
+
+1. Connect application to MongoDB Atlas.
+2. Verify connection.
+3. Create required collections/models.
+4. Create indexes.
+5. Create initial Super Admin through the secure bootstrap process.
+6. Verify login.
+7. Verify logout.
+8. Verify role authorization.
+9. Verify organization isolation.
+
+Do not put MongoDB credentials in source code.
+
+⸻
+
+36. SECURITY TESTING
+
+Before declaring authentication complete, test:
+
+Test 1
+
+Unauthenticated user accesses dashboard.
+
+Expected:
+
+Redirect to login
+
+Test 2
+
+Operator attempts Admin page.
+
+Expected:
+
+403 / Access Denied
+
+Test 3
+
+Operator attempts to change role to Admin.
+
+Expected:
+
+Rejected by backend
+
+Test 4
+
+Admin attempts to access another organization’s camera.
+
+Expected:
+
+Rejected
+
+Test 5
+
+User logs out and attempts to access protected page.
+
+Expected:
+
+Authentication required
+
+Test 6
+
+Invalid password.
+
+Expected:
+
+Authentication failed
+
+without revealing sensitive account information.
+
+Test 7
+
+Duplicate email registration.
+
+Expected:
+
+Validation/conflict response
+
+Test 8
+
+Malformed API request.
+
+Expected:
+
+Validation error
+
+not server crash.
+
+⸻
+
+37. DO NOT BREAK THE EXISTING FRONTEND
+
+After implementing authentication:
+
+Verify that:
+
+* Dashboard still works
+* Sidebar still works
+* Navigation still works
+* Settings still works
+* Users page works according to role
+* Existing forms still render
+* Existing tables still render
+* Existing responsive layout still works
+
+Do not replace the current CamOps design with a generic authentication template.
+
+⸻
+
+38. DEVELOPMENT ORDER
+
+Follow this order:
+
+STEP 1
+
+Audit current repository.
+
+STEP 2
+
+Configure MongoDB Atlas environment variables.
+
+STEP 3
+
+Create database connection.
+
+STEP 4
+
+Create User + Organization models.
+
+STEP 5
+
+Implement secure authentication.
+
+STEP 6
+
+Implement role authorization.
+
+STEP 7
+
+Implement secure Super Admin bootstrap.
+
+STEP 8
+
+Implement Admin creation.
+
+STEP 9
+
+Implement Operator creation.
+
+STEP 10
+
+Connect Login UI.
+
+STEP 11
+
+Connect Logout.
+
+STEP 12
+
+Connect current-user/profile UI.
+
+STEP 13
+
+Remove demo role switching.
+
+STEP 14
+
+Protect routes.
+
+STEP 15
+
+Protect APIs.
+
+STEP 16
+
+Implement organization isolation.
+
+STEP 17
+
+Connect Users page.
+
+STEP 18
+
+Connect Settings/profile/password.
+
+STEP 19
+
+Run security tests.
+
+STEP 20
+
+Verify existing frontend functionality.
+
+⸻
+
+39. DO NOT IMPLEMENT EVERYTHING AT ONCE
+
+Work incrementally.
+
+After each major stage:
+
+1. Run the application.
+2. Check for errors.
+3. Test the feature.
+4. Check database state.
+5. Check authorization.
+6. Fix issues.
+7. Continue.
+
+Do not generate thousands of lines of unrelated code in one operation.
+
+⸻
+
+40. REPLIT CREDIT EFFICIENCY
+
+Use the existing code wherever possible.
+
+Before creating a new file:
+
+* Check whether an appropriate existing file exists.
+* Reuse existing components.
+* Reuse existing layouts.
+* Reuse existing validation utilities.
+* Reuse existing API utilities.
+* Avoid unnecessary packages.
+* Avoid unnecessary refactoring.
+* Do not regenerate completed frontend pages.
+
+Focus the current development phase specifically on:
+
+MongoDB Atlas + Authentication + Authorization + User Management.
+
+⸻
+
+41. FINAL ACCEPTANCE CRITERIA
+
+Authentication is complete only when all of these work:
+
+* MongoDB Atlas connected
+* .env.example created
+* No secrets hardcoded
+* User collection/model implemented
+* Organization collection/model implemented
+* Secure password hashing
+* Login works
+* Logout works
+* Session/token security implemented
+* Protected routes work
+* Super Admin works
+* Admin works
+* Operator works
+* Super Admin can create Admin
+* Admin can create Operator
+* Users cannot self-escalate roles
+* Organization isolation works
+* Current user/profile works
+* Settings/password change works
+* Demo role switching removed
+* Backend authorization works
+* Authentication error handling works
+* Audit logging for important authentication/user events
+* Existing frontend still works
+* Security tests pass
+
+⸻
+
+42. FINAL REPORT
+
+When finished, report:
+
+CAMOPS AUTHENTICATION PHASE
+MongoDB Atlas:
+CONNECTED / NOT CONNECTED
+Authentication:
+COMPLETE / PARTIAL
+Roles:
+SUPER ADMIN — ...
+ADMIN — ...
+OPERATOR — ...
+Organization isolation:
+COMPLETE / PARTIAL
+Login:
+...
+Registration / account creation:
+...
+Password security:
+...
+Route protection:
+...
+API authorization:
+...
+User management:
+...
+Demo role switching:
+REMOVED / STILL PRESENT
+Security tests:
+...
+Remaining work:
+...
+
+Do not claim something is complete unless you actually tested it.
+
+⸻
+
+FINAL INSTRUCTION
+
+The frontend is already substantially built.
+
+Your job now is NOT to redesign it.
+
+Your job is to turn the existing CamOps frontend into a real authenticated application backed by MongoDB Atlas.
+
+Follow:
+
+EXISTING FRONTEND
+       ↓
+MONGODB ATLAS
+       ↓
+AUTHENTICATION
+       ↓
+ROLE AUTHORIZATION
+       ↓
+ORGANIZATION ISOLATION
+       ↓
+REAL USER MANAGEMENT
+
+Start by scanning the existing repository and determining the current architecture.
+
+Then implement the authentication and MongoDB phase incrementally.
+
+Do not ask me to manually rewrite existing frontend code unless absolutely necessary.
+
+Do not use demo role switching as real authorization.
+
+Do not allow public users to create Super Admin accounts.
+
+Begin now.
