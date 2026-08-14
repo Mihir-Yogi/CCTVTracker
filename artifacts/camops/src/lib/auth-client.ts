@@ -9,10 +9,14 @@ export type SessionUser = {
   lastLoginAt: string | null;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() ?? "";
+
+function buildApiUrl(path: string) {
+  return new URL(path, API_BASE_URL ? `${API_BASE_URL.replace(/\/+$/, "")}/` : window.location.origin).toString();
+}
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     credentials: "include",
     headers: {
       Accept: "application/json",
@@ -61,8 +65,27 @@ export async function registerAccount(input: {
   password: string;
   confirmPassword: string;
   organizationCode?: string;
+  inviteCode?: string;
 }): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>("/api/register", {
+  return apiRequest<{ message: string }>('/api/register', {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listUsers(): Promise<SessionUser[]> {
+  const response = await apiRequest<{ users?: SessionUser[] }>('/api/users');
+  return response.users ?? [];
+}
+
+export async function inviteUser(input: {
+  name: string;
+  email: string;
+  role: "ADMIN" | "OPERATOR";
+  organizationId?: string;
+}): Promise<{ delivered?: boolean; message: string; invite?: { code: string; email: string; expiresAt: string; role: string }; user?: SessionUser }> {
+  return apiRequest<{ delivered?: boolean; message: string; invite?: { code: string; email: string; expiresAt: string; role: string }; user?: SessionUser }>('/api/users/invite', {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

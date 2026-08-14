@@ -51,9 +51,17 @@ export function validatePassword(password: string): { valid: boolean; message?: 
 }
 
 export function sanitizeUser(user: any) {
+  const rawName = String(user?.name ?? "").trim();
+  const fallbackFromEmail = String(user?.email ?? "")
+    .trim()
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
   return {
     id: String(user._id ?? user.id),
-    name: user.name,
+    name: rawName || fallbackFromEmail || "Unknown user",
     email: user.email,
     role: user.role,
     organizationId: user.organizationId ? String(user.organizationId) : null,

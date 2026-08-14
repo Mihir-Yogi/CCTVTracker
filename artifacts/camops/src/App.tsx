@@ -4,7 +4,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Link, Router as WouterRouter, useLocation } from "wouter";
-import { getCurrentSessionUser, loginWithEmail, logOutSession, registerAccount, type SessionUser } from "@/lib/auth-client";
+import { getCurrentSessionUser, inviteUser, listUsers, loginWithEmail, logOutSession, registerAccount, type SessionUser } from "@/lib/auth-client";
 import {
   Activity, AlertTriangle, ArrowRight, Bell, Building2, CalendarDays, Camera, Check, CheckCheck, CheckCircle2,
   ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudDownload, Database, Eye, EyeOff, FileText,
@@ -22,6 +22,30 @@ import {
 const queryClient = new QueryClient();
 type Icon = typeof Activity;
 type Notice = { tone: "success" | "info" | "error"; message: string };
+
+const getDisplayName = (name?: string | null, email?: string | null) => {
+  const cleanName = String(name ?? "").trim();
+  if (cleanName) return cleanName;
+
+  const fallbackName = String(email ?? "")
+    .trim()
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+  return fallbackName || "Unknown user";
+};
+
+const getInitials = (name?: string | null, email?: string | null) => {
+  const text = getDisplayName(name, email);
+  return text
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? "")
+    .join("") || "US";
+};
 
 const navGroups = [
   { label: "Control desk", items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }, { label: "Daily operations", href: "/operations/daily", icon: ClipboardCheck }, { label: "Active failures", href: "/operations/failures", icon: AlertTriangle }] },
@@ -86,7 +110,7 @@ function Shell({ user, onLogout, children, notify }: { user: SessionUser; onLogo
   const role = user.role;
   const roleLabel = role === "SUPER_ADMIN" ? "Super Admin" : role === "ADMIN" ? "Admin" : "Operator";
   const roleOrg = role === "SUPER_ADMIN" ? "All organizations" : role === "OPERATOR" ? "Northstar · Central Campus" : user.organizationName ?? "Northstar Transit Authority";
-  const initials = user.name.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase() ?? "").join("") || "US";
+  const initials = getInitials(user.name);
   return <div className="camops-shell noise min-h-dvh">
     <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
       <div className="brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div><button className="mobile-close icon-btn" onClick={() => setMobileOpen(false)}><X size={18} /></button></div>
@@ -103,7 +127,7 @@ function Shell({ user, onLogout, children, notify }: { user: SessionUser; onLogo
 
 function Dashboard({ userName, role, notify }: { userName: string; role: Role; notify: (notice: Notice) => void }) {
   const [showAll, setShowAll] = useState(false);
-  const firstName = userName.split(" ").filter(Boolean)[0] ?? "Operator";
+  const firstName = getDisplayName(userName).split(" ").filter(Boolean)[0] ?? "Operator";
   const scope = role === "Super Admin" ? "System posture" : role === "Operator" ? "Your assigned run" : "Northstar Transit Authority";
   return <div className="page-enter">
     <PageHeader eyebrow={`Good morning, ${firstName} · ${scope}`} title={role === "Operator" ? "Keep the signal clean." : "Operations at a glance."} description="A live read on the assets, locations, and work that need your attention today." action={<div className="date-chip"><CalendarDays size={15} /><span>Friday, 15 March 2025</span></div>} />
@@ -121,9 +145,10 @@ function CrudModal({ title, type, onClose, onSaved }: { title: string; type: "lo
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [serial, setSerial] = useState("");
+  const [userRole, setUserRole] = useState<"OPERATOR" | "ADMIN">("OPERATOR");
   const save = () => { setSaving(true); setTimeout(() => { setSaving(false); onSaved(); }, 650); };
   const labels = { location: ["Location name", "e.g. North Annex"], device: ["Device model", "e.g. DS-7732NI-I4"], hdd: ["HDD model", "e.g. Purple WD42PURZ"], camera: ["Camera model", "e.g. P3265-LV"], user: ["Full name", "e.g. Jordan Lee"] };
-  return <Modal title={title} description="Fields marked with an asterisk are required. New records are captured in the Phase 1 audit trail." onClose={onClose} onSave={save} saving={saving}><div className="form-grid"><Field label={`${labels[type][0]} *`} placeholder={labels[type][1]} value={name} onChange={setName} />{type !== "user" && <Field label="Serial number *" placeholder="e.g. NTA-4403-AX" value={serial} onChange={setSerial} />}{type === "device" && <><SelectField label="Device type" options={["NVR", "DVR"]} value="NVR" /><Field label="Channels" placeholder="32" /></>}{type === "camera" && <><SelectField label="Camera type" options={["Dome", "Bullet", "PTZ", "Turret"]} value="Dome" /><Field label="IP address" placeholder="10.24.1.25" /></>}{type === "hdd" && <SelectField label="Capacity" options={["2 TB", "4 TB", "8 TB", "12 TB"]} value="4 TB" />}{type === "location" && <><Field label="Address" placeholder="Street address" /><Field label="Description" placeholder="What is covered here?" /></>}{type === "user" && <><Field label="Email address *" placeholder="name@organization.gov" /><SelectField label="Access role" options={["Operator", "Admin"]} value="Operator" /></>}</div></Modal>;
+  return <Modal title={title} description="Fields marked with an asterisk are required. New records are captured in the Phase 1 audit trail." onClose={onClose} onSave={save} saving={saving}><div className="form-grid"><Field label={`${labels[type][0]} *`} placeholder={labels[type][1]} value={name} onChange={setName} />{type !== "user" && <Field label="Serial number *" placeholder="e.g. NTA-4403-AX" value={serial} onChange={setSerial} />}{type === "device" && <><SelectField label="Device type" options={["NVR", "DVR"]} value="NVR" /><Field label="Channels" placeholder="32" /></>}{type === "camera" && <><SelectField label="Camera type" options={["Dome", "Bullet", "PTZ", "Turret"]} value="Dome" /><Field label="IP address" placeholder="10.24.1.25" /></>}{type === "hdd" && <SelectField label="Capacity" options={["2 TB", "4 TB", "8 TB", "12 TB"]} value="4 TB" />}{type === "location" && <><Field label="Address" placeholder="Street address" /><Field label="Description" placeholder="What is covered here?" /></>}{type === "user" && <><Field label="Email address *" placeholder="name@organization.gov" /><SelectField label="Access role" options={["OPERATOR", "ADMIN"]} value={userRole} onChange={value => setUserRole(value as "OPERATOR" | "ADMIN")} /></>}</div></Modal>;
 }
 
 function ResourcePage({ kind, title, eyebrow, description, notify }: { kind: "locations" | "nvrs" | "dvrs" | "hdds" | "combos" | "cameras" | "users"; title: string; eyebrow: string; description: string; notify: (notice: Notice) => void }) {
@@ -131,12 +156,101 @@ function ResourcePage({ kind, title, eyebrow, description, notify }: { kind: "lo
   const [filter, setFilter] = useState("All");
   const [modal, setModal] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const source = kind === "locations" ? locations : kind === "nvrs" ? devices.filter(d => d.type === "NVR") : kind === "dvrs" ? devices.filter(d => d.type === "DVR") : kind === "hdds" ? hdds : kind === "combos" ? combos : kind === "cameras" ? cameras : users;
-  const filtered = source.filter((item: any) => JSON.stringify(item).toLowerCase().includes(search.toLowerCase()) && (filter === "All" || item.status === filter));
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "OPERATOR">("OPERATOR");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [liveUsers, setLiveUsers] = useState<SessionUser[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (kind !== "users") return;
+
+    let active = true;
+    const loadUsers = async () => {
+      try {
+        setRefreshing(true);
+        const usersFromApi = await listUsers();
+        if (active) setLiveUsers(usersFromApi);
+      } catch {
+        if (active) setLiveUsers([]);
+      } finally {
+        if (active) setRefreshing(false);
+      }
+    };
+
+    void loadUsers();
+    return () => {
+      active = false;
+    };
+  }, [kind, modal]);
+
+  const source = kind === "locations" ? locations : kind === "nvrs" ? devices.filter(d => d.type === "NVR") : kind === "dvrs" ? devices.filter(d => d.type === "DVR") : kind === "hdds" ? hdds : kind === "combos" ? combos : kind === "cameras" ? cameras : liveUsers;
+  const filtered = source.filter((item: any) => {
+    if (kind !== "users") return JSON.stringify(item).toLowerCase().includes(search.toLowerCase()) && (filter === "All" || item.status === filter);
+    const normalizedStatus = String(item.status ?? "").toUpperCase();
+    const displayStatus = normalizedStatus === "PENDING" ? "Invited" : normalizedStatus === "ACTIVE" ? "Active" : normalizedStatus === "SUSPENDED" ? "Inactive" : normalizedStatus;
+    const haystack = JSON.stringify({ ...item, status: displayStatus }).toLowerCase();
+    const matchesSearch = haystack.includes(search.toLowerCase());
+    const matchesFilter = filter === "All" || displayStatus.toLowerCase() === filter.toLowerCase() || String(item.role ?? "").toLowerCase() === filter.toLowerCase();
+    return matchesSearch && matchesFilter;
+  });
   const config: Record<string, { icon: Icon; add: string }> = { locations: { icon: MapPin, add: "Register location" }, nvrs: { icon: Server, add: "Register NVR" }, dvrs: { icon: Database, add: "Register DVR" }, hdds: { icon: HardDrive, add: "Register HDD" }, combos: { icon: Network, add: "Create combo" }, cameras: { icon: Camera, add: "Register camera" }, users: { icon: Users, add: "Invite user" } };
   const IconComponent = config[kind].icon;
   const modalType = kind === "locations" ? "location" : kind === "hdds" ? "hdd" : kind === "cameras" ? "camera" : kind === "users" ? "user" : "device";
-  return <div className="page-enter"><PageHeader eyebrow={eyebrow} title={title} description={description} action={<Button onClick={() => setModal(true)}><Plus size={15} />{config[kind].add}</Button>} /><div className="resource-summary"><div className="summary-icon"><IconComponent size={20} /></div><div><strong>{source.length.toString().padStart(2, "0")}</strong><span>{kind === "users" ? "people with access" : kind === "locations" ? "managed locations" : kind === "combos" ? "active device combos" : "registered records"}</span></div><div className="summary-rule" /><div className="summary-note"><span className="live-dot" />Data layer ready · Phase 1 mock</div></div><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} placeholder={`Search ${kind} by name, serial, or location…`} />{filtered.length === 0 ? <EmptyState title="No matching records" body="Try a different search or clear your filters to see the full register." onAction={() => { setSearch(""); setFilter("All"); }} /> : <div className="table-scroll"><table className="data-table"><thead><tr>{kind === "locations" ? <><th>Location</th><th>Organization</th><th>Sub-locations</th><th>Status</th><th /></> : kind === "users" ? <><th>Person</th><th>Role</th><th>Organization</th><th>Last active</th><th>Status</th><th /></> : kind === "hdds" ? <><th>Drive</th><th>Serial</th><th>Capacity</th><th>Assigned device</th><th>Status</th><th /></> : kind === "combos" ? <><th>Combo / device</th><th>Location</th><th>Storage</th><th>Camera load</th><th>Status</th><th /></> : kind === "cameras" ? <><th>Camera</th><th>Physical location</th><th>Combo location</th><th>IP / type</th><th>Status</th><th /></> : <><th>Device</th><th>Location</th><th>Channels</th><th>Warranty</th><th>Status</th><th /></>}</tr></thead><tbody>{filtered.map((item: any, index: number) => <tr key={item.id} className="table-row-enter" style={{ animationDelay: `${index * 35}ms` }}>{kind === "locations" ? <><td><div className="table-primary"><span className="row-icon"><MapPin size={14} /></span><div><strong>{item.name}</strong><small>{item.address}</small></div></div></td><td>{item.organization}</td><td><span className="mono">{item.subLocations.length.toString().padStart(2, "0")}</span> areas</td><td><StatusBadge status={item.status} /></td></> : kind === "users" ? <><td><div className="table-primary"><span className="avatar avatar-sm">{item.name.split(" ").map((x: string) => x[0]).join("")}</span><div><strong>{item.name}</strong><small>{item.email}</small></div></div></td><td><span className="role-tag">{item.role}</span></td><td>{item.organization}</td><td className="mono text-muted">{item.lastActive}</td><td><StatusBadge status={item.status} /></td></> : kind === "hdds" ? <><td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.manufacturer}</small></div></div></td><td className="mono">{item.serial}</td><td><strong>{item.capacity}</strong></td><td className="mono">{devices.find(d => d.id === item.deviceId)?.serial}</td><td><StatusBadge status={item.status} /></td></> : kind === "combos" ? <><td><div className="table-primary"><span className="row-icon"><Network size={14} /></span><div><strong>{item.id.toUpperCase()}</strong><small>{devices.find(d => d.id === item.deviceId)?.serial}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><strong>{item.capacity}</strong><small className="block text-muted">{hdds.find(h => h.id === item.hddId)?.serial}</small></td><td><strong>{item.connectedCameras}</strong> <small className="text-muted">/ {item.connectedCameras + item.availableChannels} channels</small></td><td><StatusBadge status={item.status} /></td></> : kind === "cameras" ? <><td><div className="table-primary"><span className="row-icon"><Camera size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.physicalLocation}</td><td><span className="mono">{item.combo.toUpperCase()}</span><small className="block text-muted">{combos.find(c => c.id === item.combo)?.location}</small></td><td><span className="mono">{item.ip}</span><small className="block text-muted">{item.type} · {item.megapixel}</small></td><td><StatusBadge status={item.status} /></td></> : <><td><div className="table-primary"><span className="row-icon"><IconComponent size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><span className="mono">{item.channels}</span> <small className="text-muted">channels</small></td><td className="mono">{item.warrantyExpiry}</td><td><StatusBadge status={item.status} /></td></>}<td><button className="icon-btn table-action" data-testid={`button-edit-${item.id}`} onClick={() => notify({ tone: "info", message: `Editing ${item.id.toUpperCase()} — form prefilled from the mock service.` })}><Pencil size={15} /></button><button className="icon-btn table-action" onClick={() => setConfirm(true)}><MoreHorizontal size={15} /></button></td></tr>)}</tbody></table></div>}<div className="table-foot"><span>Showing <strong>{filtered.length}</strong> of {source.length} records</span><div className="pagination"><button className="icon-btn" disabled><ChevronRight size={15} className="rotate-180" /></button><span className="page-current">1</span><button className="icon-btn" disabled><ChevronRight size={15} /></button></div></div></section>{modal && <CrudModal title={config[kind].add} type={modalType as any} onClose={() => setModal(false)} onSaved={() => { setModal(false); notify({ tone: "success", message: `${kind.slice(0, -1)} record saved to the Phase 1 data layer.` }); }} />}{confirm && <ConfirmModal title="Archive this record?" body="The record will be marked inactive and retained for traceability." onClose={() => setConfirm(false)} onConfirm={() => { setConfirm(false); notify({ tone: "success", message: "Record archived. Audit trail updated." }); }} />}</div>;
+
+  const openCreateModal = () => {
+    setSearch("");
+    setFilter("All");
+    setModal(true);
+  };
+
+  const handleInvite = async () => {
+    if (!inviteName.trim() || !inviteEmail.trim()) {
+      notify({ tone: "error", message: "Full name and email are required." });
+      return;
+    }
+
+    try {
+      setInviteLoading(true);
+      const result = await inviteUser({ name: inviteName.trim(), email: inviteEmail.trim(), role: inviteRole });
+      setModal(false);
+      setInviteName("");
+      setInviteEmail("");
+      setInviteRole("OPERATOR");
+      const refreshed = await listUsers();
+      setLiveUsers(refreshed);
+
+      const inviteCode = result.invite?.code ?? "";
+      const message = result.message || (result.delivered === false
+        ? `Invite created. Email delivery failed, but the code is available for manual sharing: ${inviteCode}`
+        : `Invite sent successfully to ${result.invite?.email ?? inviteEmail.trim()}. Invite code: ${inviteCode}`);
+
+      notify({
+        tone: result.delivered === false ? "info" : "success",
+        message,
+      });
+    } catch (error) {
+      notify({ tone: "error", message: error instanceof Error ? error.message : "Invitation failed." });
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const renderModal = () => {
+    if (!modal) return null;
+
+    if (kind === "users") {
+      return <Modal title="Invite user" description="Create an invitation code and send it to the invited email address." onClose={() => setModal(false)} onSave={handleInvite} saving={inviteLoading}><div className="form-grid"><Field label="Full name *" placeholder="e.g. Jordan Lee" value={inviteName} onChange={setInviteName} /><Field label="Email address *" placeholder="name@organization.gov" value={inviteEmail} onChange={setInviteEmail} /><SelectField label="Access role" value={inviteRole} onChange={value => setInviteRole(value as "ADMIN" | "OPERATOR")} options={["OPERATOR", "ADMIN"]} /></div></Modal>;
+    }
+
+    return <CrudModal title={config[kind].add} type={modalType as any} onClose={() => setModal(false)} onSaved={() => {
+      setModal(false);
+      notify({ tone: "success", message: "Record created successfully." });
+    }} />;
+  };
+
+  return <div className="page-enter"><PageHeader eyebrow={eyebrow} title={title} description={description} action={<Button onClick={openCreateModal}><Plus size={15} />{config[kind].add}</Button>} /><div className="resource-summary"><div className="summary-icon"><IconComponent size={20} /></div><div><strong>{source.length.toString().padStart(2, "0")}</strong><span>{kind === "users" ? "people with access" : kind === "locations" ? "managed locations" : kind === "combos" ? "active device combos" : "registered records"}</span></div><div className="summary-rule" /><div className="summary-note"><span className="live-dot" />{kind === "users" ? (refreshing ? "Syncing access data…" : "Live access data") : "Data layer ready · Phase 1 mock"}</div></div><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} placeholder={`Search ${kind} by name, serial, or location…`} />{filtered.length === 0 ? <EmptyState title="No matching records" body="Try a different search or clear your filters to see the full register." onAction={openCreateModal} /> : <div className="table-scroll"><table className="data-table"><thead><tr>{kind === "locations" ? <><th>Location</th><th>Organization</th><th>Sub-locations</th><th>Status</th><th /></> : kind === "users" ? <><th>Person</th><th>Role</th><th>Organization</th><th>Last active</th><th>Status</th><th /></> : kind === "hdds" ? <><th>Drive</th><th>Serial</th><th>Capacity</th><th>Assigned device</th><th>Status</th><th /></> : kind === "combos" ? <><th>Combo / device</th><th>Location</th><th>Storage</th><th>Camera load</th><th>Status</th><th /></> : kind === "cameras" ? <><th>Camera</th><th>Physical location</th><th>Combo location</th><th>IP / type</th><th>Status</th><th /></> : <><th>Device</th><th>Location</th><th>Channels</th><th>Warranty</th><th>Status</th><th /></>}</tr></thead><tbody>{filtered.map((item: any, index: number) => <tr key={item.id} className="table-row-enter" style={{ animationDelay: `${index * 35}ms` }}>{kind === "locations" ? <><td><div className="table-primary"><span className="row-icon"><MapPin size={14} /></span><div><strong>{item.name}</strong><small>{item.address}</small></div></div></td><td>{item.organization}</td><td><span className="mono">{item.subLocations.length.toString().padStart(2, "0")}</span> areas</td><td><StatusBadge status={item.status} /></td></> : kind === "users" ? <><td><div className="table-primary"><span className="avatar avatar-sm">{getInitials(item.name)}</span><div><strong>{getDisplayName(item.name)}</strong><small>{item.email ?? "No email"}</small></div></div></td><td><span className="role-tag">{item.role}</span></td><td>{item.organization}</td><td className="mono text-muted">{item.lastActive}</td><td><StatusBadge status={item.status} /></td></> : kind === "hdds" ? <><td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.manufacturer}</small></div></div></td><td className="mono">{item.serial}</td><td><strong>{item.capacity}</strong></td><td className="mono">{devices.find(d => d.id === item.deviceId)?.serial}</td><td><StatusBadge status={item.status} /></td></> : kind === "combos" ? <><td><div className="table-primary"><span className="row-icon"><Network size={14} /></span><div><strong>{item.id.toUpperCase()}</strong><small>{devices.find(d => d.id === item.deviceId)?.serial}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><strong>{item.capacity}</strong><small className="block text-muted">{hdds.find(h => h.id === item.hddId)?.serial}</small></td><td><strong>{item.connectedCameras}</strong> <small className="text-muted">/ {item.connectedCameras + item.availableChannels} channels</small></td><td><StatusBadge status={item.status} /></td></> : kind === "cameras" ? <><td><div className="table-primary"><span className="row-icon"><Camera size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.physicalLocation}</td><td><span className="mono">{item.combo.toUpperCase()}</span><small className="block text-muted">{combos.find(c => c.id === item.combo)?.location}</small></td><td><span className="mono">{item.ip}</span><small className="block text-muted">{item.type} · {item.megapixel}</small></td><td><StatusBadge status={item.status} /></td></> : <><td><div className="table-primary"><span className="row-icon"><IconComponent size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><span className="mono">{item.channels}</span> <small className="text-muted">channels</small></td><td className="mono">{item.warrantyExpiry}</td><td><StatusBadge status={item.status} /></td></>}<td><button className="icon-btn table-action" data-testid={`button-edit-${item.id}`} onClick={() => notify({ tone: "info", message: `Editing ${item.id.toUpperCase()} — form prefilled from the mock service.` })}><Pencil size={15} /></button><button className="icon-btn table-action" onClick={() => setConfirm(true)}><MoreHorizontal size={15} /></button></td></tr>)}</tbody></table></div>}<div className="table-foot"><span>Showing <strong>{filtered.length}</strong> of {source.length} records</span><div className="pagination"><button className="icon-btn" disabled><ChevronRight size={15} className="rotate-180" /></button><span className="page-current">1</span><button className="icon-btn" disabled><ChevronRight size={15} /></button></div></div></section>{modal && <CrudModal title={config[kind].add} type={modalType as any} onClose={() => setModal(false)} onSaved={() => { setModal(false); notify({ tone: "success", message: `${kind.slice(0, -1)} record saved to the Phase 1 data layer.` }); }} />}{confirm && <ConfirmModal title="Archive this record?" body="The record will be marked inactive and retained for traceability." onClose={() => setConfirm(false)} onConfirm={() => { setConfirm(false); notify({ tone: "success", message: "Record archived. Audit trail updated." }); }} />}</div>;
 }
 
 function DailyOperations({ notify }: { notify: (notice: Notice) => void }) {
@@ -169,14 +283,15 @@ function ReportsPage({ notify }: { notify: (notice: Notice) => void }) {
 
 function SettingsPage({ user, role, notify }: { user: SessionUser; role: Role; notify: (notice: Notice) => void }) {
   const [saved, setSaved] = useState(false);
-  const initials = user.name.split(" ").filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase() ?? "").join("") || "US";
-  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / SETTINGS" title="Settings" description="Tune your account and the operational vocabulary used across this workspace." /><div className="settings-layout"><aside className="settings-nav"><button className="active"><UserRound size={15} />Profile</button><button><KeyRound size={15} />Password</button><button><AlertTriangle size={15} />Failure reasons</button>{role !== "Operator" && <><button><SlidersHorizontal size={15} />Status options</button><button><Building2 size={15} />Organization settings</button></>}</aside><section className="panel settings-panel"><p className="eyebrow">PROFILE / ACCOUNT</p><h2>How the desk knows you</h2><div className="profile-hero"><span className="avatar avatar-xl">{initials}</span><div><h3>{user.name}</h3><p>{role === "Operator" ? "Operations user" : role === "Admin" ? "Operations administrator" : "System administrator"} · {user.organizationName ?? "Workspace"}</p><button className="text-link" onClick={() => notify({ tone: "info", message: "Avatar upload is prepared for a later API connection." })}>Change avatar <ArrowRight size={14} /></button></div></div><div className="form-grid"><Field label="Display name" value={user.name} /><Field label="Email address" value={user.email} /><SelectField label="Time zone" value="UTC−05:00 · Eastern" options={["UTC−05:00 · Eastern", "UTC−06:00 · Central", "UTC · London"]} /><SelectField label="Default landing page" value="Dashboard" options={["Dashboard", "Daily operations", "Active failures"]} /></div><div className="settings-save"><span>{saved ? <><CheckCircle2 size={15} />Changes saved just now</> : "Changes are stored in the Phase 1 mock service."}</span><Button onClick={() => { setSaved(true); notify({ tone: "success", message: "Profile settings saved." }); }}>{saved ? "Saved" : "Save changes"} <Check size={15} /></Button></div></section></div></div>;
+  const initials = getInitials(user.name);
+  const safeName = getDisplayName(user.name);
+  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / SETTINGS" title="Settings" description="Tune your account and the operational vocabulary used across this workspace." /><div className="settings-layout"><aside className="settings-nav"><button className="active"><UserRound size={15} />Profile</button><button><KeyRound size={15} />Password</button><button><AlertTriangle size={15} />Failure reasons</button>{role !== "Operator" && <><button><SlidersHorizontal size={15} />Status options</button><button><Building2 size={15} />Organization settings</button></>}</aside><section className="panel settings-panel"><p className="eyebrow">PROFILE / ACCOUNT</p><h2>How the desk knows you</h2><div className="profile-hero"><span className="avatar avatar-xl">{initials}</span><div><h3>{safeName}</h3><p>{role === "Operator" ? "Operations user" : role === "Admin" ? "Operations administrator" : "System administrator"} · {user.organizationName ?? "Workspace"}</p><button className="text-link" onClick={() => notify({ tone: "info", message: "Avatar upload is prepared for a later API connection." })}>Change avatar <ArrowRight size={14} /></button></div></div><div className="form-grid"><Field label="Display name" value={safeName} /><Field label="Email address" value={user.email} /><SelectField label="Time zone" value="UTC−05:00 · Eastern" options={["UTC−05:00 · Eastern", "UTC−06:00 · Central", "UTC · London"]} /><SelectField label="Default landing page" value="Dashboard" options={["Dashboard", "Daily operations", "Active failures"]} /></div><div className="settings-save"><span>{saved ? <><CheckCircle2 size={15} />Changes saved just now</> : "Changes are stored in the Phase 1 mock service."}</span><Button onClick={() => { setSaved(true); notify({ tone: "success", message: "Profile settings saved." }); }}>{saved ? "Saved" : "Save changes"} <Check size={15} /></Button></div></section></div></div>;
 }
 
 function AuditPage() {
   const [search, setSearch] = useState("");
   const filtered = auditLogs.filter(log => JSON.stringify(log).toLowerCase().includes(search.toLowerCase()));
-  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / READ ONLY" title="Audit logs" description="A durable, read-only account of changes made across the operations desk." action={<Button variant="secondary"><Download size={15} /> Phase 2 export</Button>} /><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} placeholder="Search user, entity, action, or ID…" /><div className="table-scroll"><table className="data-table"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Previous</th><th>New value</th></tr></thead><tbody>{filtered.map(log => <tr key={log.id}><td className="mono">{log.dateTime}</td><td><div className="table-primary"><span className="avatar avatar-sm">{log.user.split(" ").map(x => x[0]).join("")}</span><strong>{log.user}</strong></div></td><td><span className="action-tag">{log.action}</span></td><td><strong>{log.entity}</strong><small className="block text-muted mono">{log.entityId}</small></td><td className="text-muted">{log.previousValue}</td><td><strong>{log.newValue}</strong></td></tr>)}</tbody></table></div></section></div>;
+  return <div className="page-enter"><PageHeader eyebrow="SYSTEM / READ ONLY" title="Audit logs" description="A durable, read-only account of changes made across the operations desk." action={<Button variant="secondary"><Download size={15} /> Phase 2 export</Button>} /><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} placeholder="Search user, entity, action, or ID…" /><div className="table-scroll"><table className="data-table"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Previous</th><th>New value</th></tr></thead><tbody>{filtered.map(log => <tr key={log.id}><td className="mono">{log.dateTime}</td><td><div className="table-primary"><span className="avatar avatar-sm">{getInitials(log.user)}</span><strong>{getDisplayName(log.user)}</strong></div></td><td><span className="action-tag">{log.action}</span></td><td><strong>{log.entity}</strong><small className="block text-muted mono">{log.entityId}</small></td><td className="text-muted">{log.previousValue}</td><td><strong>{log.newValue}</strong></td></tr>)}</tbody></table></div></section></div>;
 }
 
 function AuthPage({ register = false, onAuthenticated }: { register?: boolean; onAuthenticated: (user: SessionUser) => void }) {
@@ -187,14 +302,14 @@ function AuthPage({ register = false, onAuthenticated }: { register?: boolean; o
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [organizationCode, setOrganizationCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const submit = async () => {
     setLoading(true);
     setError("");
     try {
       if (register) {
-        const payload = { name, email, password, confirmPassword, organizationCode };
+        const payload = { name, email, password, confirmPassword, inviteCode };
         await registerAccount(payload);
         setLocation("/login");
         return;
@@ -207,7 +322,7 @@ function AuthPage({ register = false, onAuthenticated }: { register?: boolean; o
       setLoading(false);
     }
   };
-  return <div className="auth-page noise"><div className="auth-art"><div className="auth-art-inner"><div className="brand brand-light"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-quote"><span className="eyebrow">CONTROL THE SIGNAL</span><h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1><p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p></div><div className="auth-art-foot"><span className="mono">NORTHSTAR / CONTROL ROOM</span><span>PHASE 1 PREVIEW</span></div></div></div><div className="auth-form-side"><div className="auth-form-wrap"><div className="mobile-auth-brand brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-heading"><p className="eyebrow">{register ? "INVITATION / ACCOUNT SETUP" : "SECURE ACCESS / 01"}</p><h2 className="display">{register ? "Set up your desk access." : "Welcome back."}</h2><p>{register ? "Your invitation controls your organization and access level. Elevated roles can only be assigned by an administrator." : "Sign in to continue to your operations desk."}</p></div>{error && <div className="auth-error"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={14} /></button></div>}<div className="auth-fields">{register && <><Field label="Full name" placeholder="Your full name" value={name} onChange={setName} /><Field label="Invitation code" placeholder="Paste your invitation code" value={organizationCode} onChange={setOrganizationCode} /></> }<Field label="Work email" placeholder="name@organization.gov" value={email} onChange={setEmail} /><label className="field"><span>Password</span><div className="password-wrap"><input data-testid="input-password" type={show ? "text" : "password"} placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} /><button type="button" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>{register && <Field label="Confirm password" type="password" placeholder="Repeat your password" value={confirmPassword} onChange={setConfirmPassword} />}</div>{!register && <div className="auth-options"><label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label><button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button></div>}<Button className="auth-submit" onClick={submit} disabled={loading}>{loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}{!loading && <ArrowRight size={16} />}</Button>{!register ? <p className="auth-switch">Need an invited account? <Link href="/register">Set up access <ArrowRight size={14} /></Link></p> : <p className="auth-switch">Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link></p>}<p className="auth-footnote"><LockKeyhole size={13} /> Demo workspace · no production credentials accepted</p></div></div></div>;
+  return <div className="auth-page noise"><div className="auth-art"><div className="auth-art-inner"><div className="brand brand-light"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-quote"><span className="eyebrow">CONTROL THE SIGNAL</span><h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1><p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p></div><div className="auth-art-foot"><span className="mono">NORTHSTAR / CONTROL ROOM</span><span>PHASE 1 PREVIEW</span></div></div></div><div className="auth-form-side"><div className="auth-form-wrap"><div className="mobile-auth-brand brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-heading"><p className="eyebrow">{register ? "INVITATION / ACCOUNT SETUP" : "SECURE ACCESS / 01"}</p><h2 className="display">{register ? "Set up your desk access." : "Welcome back."}</h2><p>{register ? "Your invitation controls your organization and access level. Elevated roles can only be assigned by an administrator." : "Sign in to continue to your operations desk."}</p></div>{error && <div className="auth-error"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={14} /></button></div>}<div className="auth-fields">{register && <><Field label="Full name" placeholder="Your full name" value={name} onChange={setName} /><Field label="Invitation code" placeholder="Paste your invitation code" value={inviteCode} onChange={setInviteCode} /></> }<Field label="Work email" placeholder="name@organization.gov" value={email} onChange={setEmail} /><label className="field"><span>Password</span><div className="password-wrap"><input data-testid="input-password" type={show ? "text" : "password"} placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} /><button type="button" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>{register && <Field label="Confirm password" type="password" placeholder="Repeat your password" value={confirmPassword} onChange={setConfirmPassword} />}</div>{!register && <div className="auth-options"><label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label><button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button></div>}<Button className="auth-submit" onClick={submit} disabled={loading}>{loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}{!loading && <ArrowRight size={16} />}</Button>{!register ? <p className="auth-switch">Need an invited account? <Link href="/register">Set up access <ArrowRight size={14} /></Link></p> : <p className="auth-switch">Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link></p>}<p className="auth-footnote"><LockKeyhole size={13} /> Demo workspace · no production credentials accepted</p></div></div></div>;
 }
 
 function RoutedApp() {

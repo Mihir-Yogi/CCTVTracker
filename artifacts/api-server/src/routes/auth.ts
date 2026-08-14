@@ -3,10 +3,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { UserModel } from "../models/User";
 import { OrganizationModel } from "../models/Organization";
+import { InvitationModel } from "../models/Invitation";
 import { env } from "../config/env";
 import { hashPassword, normalizeRole, sanitizeUser, validatePassword, verifyPassword } from "../lib/auth";
 import { requireAuth } from "../middlewares/auth";
 import { logger } from "../lib/logger";
+import { sendInviteEmail } from "../lib/mailer";
 
 const router = Router();
 
@@ -21,7 +23,15 @@ const registerSchema = z.object({
   password: z.string().min(8),
   confirmPassword: z.string().min(8),
   organizationCode: z.string().trim().optional(),
+  inviteCode: z.string().trim().optional(),
   role: z.enum(["SUPER_ADMIN", "ADMIN", "OPERATOR"]).optional(),
+});
+
+const inviteUserSchema = z.object({
+  name: z.string().trim().min(2),
+  email: z.string().trim().email(),
+  role: z.enum(["ADMIN", "OPERATOR"]).default("OPERATOR"),
+  organizationId: z.string().trim().optional(),
 });
 
 const createUserSchema = z.object({
@@ -118,7 +128,7 @@ router.post("/register", async (req: Request, res: Response) => {
   }
 
   try {
-    const { name, email, password, confirmPassword, organizationCode } = parsed.data;
+    const { name, email, password, confirmPassword, organizationCode, inviteCode } = parsed.data;
 
     if (password !== confirmPassword) {
       return res.status(422).json({ message: "Passwords do not match." });
@@ -129,32 +139,95 @@ router.post("/register", async (req: Request, res: Response) => {
       return res.status(422).json({ message: passwordCheck.message });
     }
 
-    const existing = await UserModel.findOne({ email: email.toLowerCase() });
-    if (existing) {
+    const normalizedEmail = email.toLowerCase();
+    let existingUser = await UserModel.findOne({ email: normalizedEmail });
+    let targetOrganization = null as any;
+    let targetRole = "OPERATOR" as "OPERATOR" | "ADMIN" | "SUPER_ADMIN";
+
+    if (inviteCode) {
+      const invitation = await InvitationModel.findOne({ code: inviteCode.toUpperCase() }).populate("organizationId");
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation code not found." });
+      }
+
+      if (invitation.status !== "SENT") {
+        return res.status(410).json({ message: "This invitation has already been used or expired." });
+      }
+
+      if (new Date(invitation.expiresAt) < new Date()) {
+        invitation.status = "EXPIRED";
+        await invitation.save();
+        return res.status(410).json({ message: "This invitation has expired." });
+      }
+
+      if (invitation.email !== normalizedEmail) {
+        return res.status(409).json({ message: "This invitation does not match the provided email address." });
+      }
+
+      targetOrganization = invitation.organizationId;
+      targetRole = invitation.role;
+      existingUser = existingUser ?? (await UserModel.findOne({ email: normalizedEmail, status: "PENDING" }));
+    } else {
+      const organization = organizationCode
+        ? await OrganizationModel.findOne({ code: organizationCode.toUpperCase() })
+        : null;
+
+      if (!organization && organizationCode) {
+        return res.status(404).json({ message: "Organization code not found." });
+      }
+
+      targetOrganization = organization;
+      targetRole = "OPERATOR";
+    }
+
+    if (existingUser && existingUser.status === "ACTIVE") {
       return res.status(409).json({ message: "An account with this email already exists." });
     }
 
-    const organization = organizationCode
-      ? await OrganizationModel.findOne({ code: organizationCode.toUpperCase() })
-      : null;
+    if (existingUser && existingUser.status === "PENDING") {
+      existingUser.name = name;
+      existingUser.passwordHash = await hashPassword(password);
+      existingUser.role = targetRole;
+      existingUser.organizationId = targetOrganization?._id ?? existingUser.organizationId ?? null;
+      existingUser.status = "ACTIVE";
+      await existingUser.save();
 
-    if (!organization && organizationCode) {
-      return res.status(404).json({ message: "Organization code not found." });
+      if (inviteCode) {
+        const invitation = await InvitationModel.findOne({ code: inviteCode.toUpperCase() });
+        if (invitation) {
+          invitation.status = "USED";
+          invitation.usedAt = new Date();
+          invitation.usedBy = existingUser._id;
+          await invitation.save();
+        }
+      }
+
+      logger.info({ userId: existingUser._id }, "Invited account activated");
+      return res.status(201).json({ message: "Account created successfully." });
     }
 
-    const accountRole = organization ? "OPERATOR" : "OPERATOR";
     const passwordHash = await hashPassword(password);
     const user = await UserModel.create({
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       passwordHash,
-      role: accountRole,
-      organizationId: organization?._id ?? null,
-      status: "PENDING",
+      role: targetRole,
+      organizationId: targetOrganization?._id ?? null,
+      status: "ACTIVE",
     });
 
+    if (inviteCode) {
+      const invitation = await InvitationModel.findOne({ code: inviteCode.toUpperCase() });
+      if (invitation) {
+        invitation.status = "USED";
+        invitation.usedAt = new Date();
+        invitation.usedBy = user._id;
+        await invitation.save();
+      }
+    }
+
     logger.info({ userId: user._id }, "Public account request created");
-    return res.status(201).json({ message: "Account request created. An administrator will review it." });
+    return res.status(201).json({ message: "Account created successfully." });
   } catch (error) {
     logger.error({ err: error }, "Registration failed");
     return res.status(500).json({ message: "Unable to create account." });
@@ -298,6 +371,94 @@ router.get("/users", requireAuth, async (req: Request, res: Response) => {
   }
 
   return res.status(403).json({ message: "Forbidden." });
+});
+
+router.post("/users/invite", requireAuth, async (req: Request, res: Response) => {
+  if (req.session.role !== "ADMIN" && req.session.role !== "SUPER_ADMIN") {
+    return res.status(403).json({ message: "Forbidden." });
+  }
+
+  const parsed = inviteUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(422).json({ message: "Invalid invitation payload." });
+  }
+
+  const { name, email, role, organizationId } = parsed.data;
+  const normalizedEmail = email.toLowerCase();
+
+  const targetOrgId = req.session.role === "ADMIN" ? req.session.organizationId : organizationId ?? req.session.organizationId;
+  if (!targetOrgId) {
+    return res.status(422).json({ message: "Organization is required." });
+  }
+
+  if (req.session.role === "ADMIN") {
+    const org = await OrganizationModel.findById(targetOrgId);
+    if (!org) {
+      return res.status(404).json({ message: "Organization not found." });
+    }
+  }
+
+  const existingUser = await UserModel.findOne({ email: normalizedEmail });
+  if (existingUser && existingUser.status === "ACTIVE") {
+    return res.status(409).json({ message: "User already exists." });
+  }
+
+  const existingInvite = await InvitationModel.findOne({ email: normalizedEmail, status: "SENT" });
+  if (existingInvite) {
+    return res.status(409).json({ message: "An invitation for this email is already active." });
+  }
+
+  let user = existingUser;
+  if (!user) {
+    user = await UserModel.create({
+      name,
+      email: normalizedEmail,
+      passwordHash: await hashPassword(`invite-${Math.random().toString(36).slice(2)}-${Date.now()}`),
+      role: normalizeRole(role),
+      organizationId: targetOrgId,
+      status: "PENDING",
+    });
+  } else {
+    user.name = name;
+    user.role = normalizeRole(role);
+    user.organizationId = targetOrgId;
+    user.status = "PENDING";
+    await user.save();
+  }
+
+  const code = `C-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const invitation = await InvitationModel.create({
+    code,
+    name,
+    email: normalizedEmail,
+    role: normalizeRole(role),
+    organizationId: targetOrgId,
+    status: "SENT",
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    createdBy: req.session.userId,
+  });
+
+  const mailResult = await sendInviteEmail({
+    to: normalizedEmail,
+    name,
+    code: invitation.code,
+    role: invitation.role,
+    expiresAt: invitation.expiresAt,
+  });
+
+  logger.info({ userId: user._id, inviteCode: invitation.code, emailDelivered: mailResult.delivered }, "Invitation created");
+
+  return res.status(201).json({
+    delivered: mailResult.delivered,
+    message: mailResult.message,
+    invite: {
+      code: invitation.code,
+      email: normalizedEmail,
+      expiresAt: invitation.expiresAt,
+      role: invitation.role,
+    },
+    user: sanitizeUser({ ...user.toObject(), organizationName: user.organizationId ? "Organization" : null }),
+  });
 });
 
 router.post("/users", requireAuth, async (req: Request, res: Response) => {

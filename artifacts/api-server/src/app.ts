@@ -8,6 +8,15 @@ import { sessionMiddleware } from "./lib/session";
 import { env } from "./config/env";
 
 const app: Express = express();
+const allowedOrigins = new Set([
+  env.FRONTEND_URL,
+  "http://localhost:4174",
+  "http://127.0.0.1:4174",
+  "http://localhost:4175",
+  "http://127.0.0.1:4175",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]);
 
 app.use(
   pinoHttp({
@@ -30,7 +39,24 @@ app.use(
 );
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   }),
 );
