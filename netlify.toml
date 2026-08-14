@@ -1,0 +1,8 @@
+[build]
+  command = "pnpm --filter @workspace/camops build"
+  publish = "artifacts/camops/dist/public"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
