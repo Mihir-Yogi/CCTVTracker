@@ -9,7 +9,6 @@ const organizationSchema = new Schema(
   { timestamps: true },
 );
 
-organizationSchema.index({ code: 1 }, { unique: true });
 organizationSchema.index({ status: 1 });
 
 export type OrganizationDocument = InferSchemaType<typeof organizationSchema> & {

@@ -4,13 +4,13 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Link, Router as WouterRouter, useLocation } from "wouter";
-import { getCurrentSessionUser, loginWithEmail, logOutSession, registerAccount, type SessionUser } from "@/lib/auth-client";
+import { getCurrentSessionUser, loginWithEmail, logOutSession, registerAccount, sendUserInvitation, getInvitations, resendUserInvitation, cancelUserInvitation, fetchUsers, fetchOrganizations, type SessionUser, type UserInvitation, type OrganizationItem } from "@/lib/auth-client";
 import {
   Activity, AlertTriangle, ArrowRight, Bell, Building2, CalendarDays, Camera, Check, CheckCheck, CheckCircle2,
   ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudDownload, Database, Eye, EyeOff, FileText,
   HardDrive, History, LayoutDashboard, LogOut, Menu, MoreHorizontal, Network, Pencil, Plus,
   RefreshCw, Search, Save, Server, Settings, ShieldCheck, SlidersHorizontal, UserRound, Users,
-  X, LockKeyhole, Radio, MapPin, KeyRound, Download
+  X, LockKeyhole, Radio, MapPin, KeyRound, Download, Mail, Send, Copy, Timer, Clock, Link2
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import {
@@ -30,23 +30,69 @@ const navGroups = [
   { label: "Administration", items: [{ label: "Users", href: "/users", icon: Users }, { label: "Settings", href: "/settings", icon: Settings }] },
 ];
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: AssetStatus | string }) {
   const tone = status === "Working" || status === "Active" ? "healthy" : status === "Under Maintenance" || status === "Invited" ? "warning" : status === "Not Working" || status === "Damaged" || status === "No Power" ? "danger" : "neutral";
-  return <span data-testid={`status-${status.toLowerCase().replaceAll(" ", "-")}`} className={`status-badge status-${tone}`}><span className="status-dot" />{status}</span>;
+  return <span className={`status-badge status-${tone}`}><span className="status-dot" />{status}</span>;
 }
 
-function Button({ children, className = "", variant = "primary", ...props }: { children: ReactNode; className?: string; variant?: "primary" | "secondary" | "ghost" | "danger"; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean }) {
-  return <button data-testid="button-action" className={`btn btn-${variant} ${className}`} {...props}>{children}</button>;
+function Button({ children, className = "", variant = "primary", style, title, ...props }: { children: ReactNode; className?: string; variant?: "primary" | "secondary" | "ghost" | "danger"; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean; style?: React.CSSProperties; title?: string }) {
+  return <button data-testid="button-action" className={`btn btn-${variant} ${className}`} style={style} title={title} {...props}>{children}</button>;
 }
 
-function Modal({ title, description, onClose, onSave, children, saving = false }: { title: string; description?: string; onClose: () => void; onSave: () => void; children: ReactNode; saving?: boolean }) {
-  return <div className="modal-backdrop" role="dialog" aria-modal="true">
-    <div className="modal-panel page-enter">
-      <div className="modal-head"><div><p className="eyebrow">CAMOPS / RECORD</p><h2 className="display text-2xl font-semibold">{title}</h2>{description && <p className="helper">{description}</p>}</div><button data-testid="button-close-modal" className="icon-btn" onClick={onClose}><X size={18} /></button></div>
-      <div className="modal-body">{children}</div>
-      <div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={onSave} disabled={saving}>{saving ? "Saving record…" : <><Save size={15} />Save record</>}</Button></div>
+function Modal({
+  title,
+  description,
+  onClose,
+  onSave,
+  children,
+  saving = false,
+  saveLabel = "Save record",
+  savingLabel = "Saving record…",
+  saveIcon: SaveIcon = Save,
+  eyebrow = "CAMOPS / RECORD",
+  footer,
+}: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  onSave?: () => void;
+  children: ReactNode;
+  saving?: boolean;
+  saveLabel?: string;
+  savingLabel?: string;
+  saveIcon?: any;
+  eyebrow?: string;
+  footer?: ReactNode;
+}) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-panel page-enter">
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2 className="display text-2xl font-semibold">{title}</h2>
+            {description && <p className="helper">{description}</p>}
+          </div>
+          <button data-testid="button-close-modal" className="icon-btn" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+        <div className="modal-foot">
+          {footer ?? (
+            <>
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              {onSave && (
+                <Button onClick={onSave} disabled={saving}>
+                  {saving ? savingLabel : <><SaveIcon size={15} />{saveLabel}</>}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function ConfirmModal({ title, body, onClose, onConfirm }: { title: string; body: string; onClose: () => void; onConfirm: () => void }) {
@@ -126,18 +172,578 @@ function CrudModal({ title, type, onClose, onSaved }: { title: string; type: "lo
   return <Modal title={title} description="Fields marked with an asterisk are required. New records are captured in the Phase 1 audit trail." onClose={onClose} onSave={save} saving={saving}><div className="form-grid"><Field label={`${labels[type][0]} *`} placeholder={labels[type][1]} value={name} onChange={setName} />{type !== "user" && <Field label="Serial number *" placeholder="e.g. NTA-4403-AX" value={serial} onChange={setSerial} />}{type === "device" && <><SelectField label="Device type" options={["NVR", "DVR"]} value="NVR" /><Field label="Channels" placeholder="32" /></>}{type === "camera" && <><SelectField label="Camera type" options={["Dome", "Bullet", "PTZ", "Turret"]} value="Dome" /><Field label="IP address" placeholder="10.24.1.25" /></>}{type === "hdd" && <SelectField label="Capacity" options={["2 TB", "4 TB", "8 TB", "12 TB"]} value="4 TB" />}{type === "location" && <><Field label="Address" placeholder="Street address" /><Field label="Description" placeholder="What is covered here?" /></>}{type === "user" && <><Field label="Email address *" placeholder="name@organization.gov" /><SelectField label="Access role" options={["Operator", "Admin"]} value="Operator" /></>}</div></Modal>;
 }
 
-function ResourcePage({ kind, title, eyebrow, description, notify }: { kind: "locations" | "nvrs" | "dvrs" | "hdds" | "combos" | "cameras" | "users"; title: string; eyebrow: string; description: string; notify: (notice: Notice) => void }) {
+function InviteUserModal({
+  currentUser,
+  onClose,
+  onSent,
+}: {
+  currentUser?: SessionUser | null;
+  onClose: () => void;
+  onSent: (message: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"ADMIN" | "OPERATOR">("OPERATOR");
+  const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
+  const [organizationId, setOrganizationId] = useState<string>(currentUser?.organizationId ?? "");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [sentResult, setSentResult] = useState<{
+    email: string;
+    code: string;
+    message: string;
+    registrationUrl: string;
+    delivered?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (currentUser?.role === "SUPER_ADMIN") {
+      void fetchOrganizations().then((orgs) => {
+        setOrganizations(orgs);
+        if (orgs.length > 0 && !organizationId) {
+          setOrganizationId(orgs[0]._id);
+        }
+      });
+    }
+  }, [currentUser?.role]);
+
+  const handleSend = async () => {
+    if (!email || !email.includes("@")) {
+      setError("Please enter a valid work email address.");
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      const res = await sendUserInvitation({
+        email: email.trim(),
+        role,
+        organizationId: organizationId || undefined,
+      });
+
+      const regUrl = `${window.location.origin}/register?email=${encodeURIComponent(email.trim())}&code=${encodeURIComponent(res.invitation.code)}`;
+
+      setSentResult({
+        email: email.trim(),
+        code: res.invitation.code,
+        message: res.message,
+        registrationUrl: regUrl,
+        delivered: res.mail?.delivered,
+      });
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to send invitation email.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sentResult) {
+    return (
+      <Modal
+        eyebrow="CAMOPS / EMAIL DISPATCH SUCCESS"
+        title="10-Minute Invitation Dispatched"
+        description="The registration code has been generated and dispatched."
+        onClose={() => {
+          onSent(sentResult.message);
+        }}
+        footer={
+          <div style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center" }}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSentResult(null);
+                setEmail("");
+              }}
+            >
+              <Plus size={14} /> Invite Another
+            </Button>
+            <Button
+              onClick={() => {
+                onSent(sentResult.message);
+              }}
+            >
+              <Check size={14} /> Done
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div
+            style={{
+              padding: "16px",
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <CheckCircle2 size={24} style={{ color: "#34d399", flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: "#ffffff", fontSize: "14px", display: "block" }}>
+                Email Dispatched via Resend
+              </strong>
+              <span style={{ color: "#94a3b8", fontSize: "13px" }}>
+                Sent to <strong style={{ color: "#e2e8f0" }}>{sentResult.email}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#0b0e14",
+              border: "1px dashed #f59e0b",
+              borderRadius: "8px",
+              padding: "20px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "1.5px", color: "#94a3b8", marginBottom: "6px" }}>
+              10-Minute Registration Code
+            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "6px", color: "#fbbf24", fontFamily: "Consolas, Monaco, monospace" }}>
+              {sentResult.code}
+            </div>
+            <div style={{ fontSize: "12px", color: "#f87171", marginTop: "6px", fontWeight: 500 }}>
+              ⏱️ Valid for 10 minutes only
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, fontSize: "13px", padding: "10px 14px", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "6px" }}
+              onClick={() => {
+                void navigator.clipboard.writeText(sentResult.code);
+              }}
+            >
+              <Copy size={14} /> Copy Code
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ flex: 1, fontSize: "13px", padding: "10px 14px", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "6px" }}
+              onClick={() => {
+                void navigator.clipboard.writeText(sentResult.registrationUrl);
+              }}
+            >
+              <Link2 size={14} /> Copy Invite Link
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal
+      eyebrow="CAMOPS / DIRECT EMAIL DISPATCH"
+      title="Invite User & Send 10-Min Code"
+      description="A secure 10-minute registration code will be generated and directly dispatched to the recipient's inbox via Resend."
+      onClose={onClose}
+      onSave={handleSend}
+      saving={sending}
+      saveLabel="Send Invitation Email"
+      savingLabel="Sending email via Resend…"
+      saveIcon={Send}
+    >
+      <div className="form-grid">
+        {error && (
+          <div className="auth-error col-span-full">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+        <Field
+          label="Recipient email address *"
+          placeholder="colleague@organization.gov"
+          value={email}
+          onChange={(v) => {
+            setEmail(v);
+            setError("");
+          }}
+          type="email"
+        />
+        <SelectField
+          label="Access role"
+          options={["Operator", "Admin"]}
+          value={role === "ADMIN" ? "Admin" : "Operator"}
+          onChange={(v) => setRole(v === "Admin" ? "ADMIN" : "OPERATOR")}
+        />
+        {currentUser?.role === "SUPER_ADMIN" && organizations.length > 0 && (
+          <label className="field">
+            <span>Target organization</span>
+            <select
+              value={organizationId}
+              onChange={(e) => setOrganizationId(e.target.value)}
+            >
+              {organizations.map((org) => (
+                <option key={org._id} value={org._id}>
+                  {org.name} ({org.code})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="confirm-box col-span-full mt-2" style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "12px", background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.25)", borderRadius: "6px", color: "#fcd34d", fontSize: "12px" }}>
+          <Clock size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+          <span>
+            <strong>10-Minute Expiry:</strong> The invite code will expire in 10 minutes. If the code expires before the recipient registers, you can easily click &quot;Resend&quot; to issue a new one.
+          </span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function formatRemainingTime(seconds: number): string {
+  if (seconds <= 0) return "Expired";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: pageUser }: { kind: "locations" | "nvrs" | "dvrs" | "hdds" | "combos" | "cameras" | "users"; title: string; eyebrow: string; description: string; notify: (notice: Notice) => void; currentUser?: SessionUser | null }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [modal, setModal] = useState(false);
+  const [inviteModal, setInviteModal] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const source = kind === "locations" ? locations : kind === "nvrs" ? devices.filter(d => d.type === "NVR") : kind === "dvrs" ? devices.filter(d => d.type === "DVR") : kind === "hdds" ? hdds : kind === "combos" ? combos : kind === "cameras" ? cameras : users;
+  const [invitations, setInvitations] = useState<UserInvitation[]>([]);
+  const [realUsers, setRealUsers] = useState<SessionUser[]>([]);
+  const [activeTab, setActiveTab] = useState<"users" | "invites">("users");
+
+  const loadUsersAndInvites = async () => {
+    if (kind === "users") {
+      const [uList, invList] = await Promise.all([fetchUsers(), getInvitations()]);
+      if (uList.length > 0) setRealUsers(uList);
+      setInvitations(invList);
+    }
+  };
+
+  useEffect(() => {
+    void loadUsersAndInvites();
+  }, [kind]);
+
+  // Live countdown timer for active invitations
+  useEffect(() => {
+    if (kind !== "users" || invitations.length === 0) return;
+    const interval = setInterval(() => {
+      setInvitations((prev) =>
+        prev.map((inv) => {
+          if (inv.status !== "PENDING") return inv;
+          const diff = Math.max(0, Math.floor((new Date(inv.expiresAt).getTime() - Date.now()) / 1000));
+          return {
+            ...inv,
+            remainingSeconds: diff,
+            status: diff <= 0 ? ("EXPIRED" as const) : inv.status,
+          };
+        })
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [kind, invitations.length]);
+
+  const handleResendInvite = async (invId: string, email: string) => {
+    try {
+      const res = await resendUserInvitation(invId);
+      notify({ tone: "success", message: `New 10-minute code dispatched to ${email} via Resend!` });
+      void loadUsersAndInvites();
+    } catch (err: any) {
+      notify({ tone: "error", message: err?.message ?? "Failed to resend invitation code." });
+    }
+  };
+
+  const handleCancelInvite = async (invId: string) => {
+    try {
+      await cancelUserInvitation(invId);
+      notify({ tone: "info", message: "Invitation cancelled." });
+      void loadUsersAndInvites();
+    } catch (err: any) {
+      notify({ tone: "error", message: err?.message ?? "Failed to cancel invitation." });
+    }
+  };
+
+  const source = kind === "locations" ? locations : kind === "nvrs" ? devices.filter(d => d.type === "NVR") : kind === "dvrs" ? devices.filter(d => d.type === "DVR") : kind === "hdds" ? hdds : kind === "combos" ? combos : kind === "cameras" ? cameras : (realUsers.length > 0 ? realUsers : users);
   const filtered = source.filter((item: any) => JSON.stringify(item).toLowerCase().includes(search.toLowerCase()) && (filter === "All" || item.status === filter));
-  const config: Record<string, { icon: Icon; add: string }> = { locations: { icon: MapPin, add: "Register location" }, nvrs: { icon: Server, add: "Register NVR" }, dvrs: { icon: Database, add: "Register DVR" }, hdds: { icon: HardDrive, add: "Register HDD" }, combos: { icon: Network, add: "Create combo" }, cameras: { icon: Camera, add: "Register camera" }, users: { icon: Users, add: "Invite user" } };
+  const config: Record<string, { icon: Icon; add: string }> = { locations: { icon: MapPin, add: "Register location" }, nvrs: { icon: Server, add: "Register NVR" }, dvrs: { icon: Database, add: "Register DVR" }, hdds: { icon: HardDrive, add: "Register HDD" }, combos: { icon: Network, add: "Create combo" }, cameras: { icon: Camera, add: "Register camera" }, users: { icon: Users, add: "Invite user (Send email)" } };
   const IconComponent = config[kind].icon;
   const modalType = kind === "locations" ? "location" : kind === "hdds" ? "hdd" : kind === "cameras" ? "camera" : kind === "users" ? "user" : "device";
-  return <div className="page-enter"><PageHeader eyebrow={eyebrow} title={title} description={description} action={<Button onClick={() => setModal(true)}><Plus size={15} />{config[kind].add}</Button>} /><div className="resource-summary"><div className="summary-icon"><IconComponent size={20} /></div><div><strong>{source.length.toString().padStart(2, "0")}</strong><span>{kind === "users" ? "people with access" : kind === "locations" ? "managed locations" : kind === "combos" ? "active device combos" : "registered records"}</span></div><div className="summary-rule" /><div className="summary-note"><span className="live-dot" />Data layer ready · Phase 1 mock</div></div><section className="panel table-panel"><TableToolbar search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} placeholder={`Search ${kind} by name, serial, or location…`} />{filtered.length === 0 ? <EmptyState title="No matching records" body="Try a different search or clear your filters to see the full register." onAction={() => { setSearch(""); setFilter("All"); }} /> : <div className="table-scroll"><table className="data-table"><thead><tr>{kind === "locations" ? <><th>Location</th><th>Organization</th><th>Sub-locations</th><th>Status</th><th /></> : kind === "users" ? <><th>Person</th><th>Role</th><th>Organization</th><th>Last active</th><th>Status</th><th /></> : kind === "hdds" ? <><th>Drive</th><th>Serial</th><th>Capacity</th><th>Assigned device</th><th>Status</th><th /></> : kind === "combos" ? <><th>Combo / device</th><th>Location</th><th>Storage</th><th>Camera load</th><th>Status</th><th /></> : kind === "cameras" ? <><th>Camera</th><th>Physical location</th><th>Combo location</th><th>IP / type</th><th>Status</th><th /></> : <><th>Device</th><th>Location</th><th>Channels</th><th>Warranty</th><th>Status</th><th /></>}</tr></thead><tbody>{filtered.map((item: any, index: number) => <tr key={item.id} className="table-row-enter" style={{ animationDelay: `${index * 35}ms` }}>{kind === "locations" ? <><td><div className="table-primary"><span className="row-icon"><MapPin size={14} /></span><div><strong>{item.name}</strong><small>{item.address}</small></div></div></td><td>{item.organization}</td><td><span className="mono">{item.subLocations.length.toString().padStart(2, "0")}</span> areas</td><td><StatusBadge status={item.status} /></td></> : kind === "users" ? <><td><div className="table-primary"><span className="avatar avatar-sm">{item.name.split(" ").map((x: string) => x[0]).join("")}</span><div><strong>{item.name}</strong><small>{item.email}</small></div></div></td><td><span className="role-tag">{item.role}</span></td><td>{item.organization}</td><td className="mono text-muted">{item.lastActive}</td><td><StatusBadge status={item.status} /></td></> : kind === "hdds" ? <><td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.manufacturer}</small></div></div></td><td className="mono">{item.serial}</td><td><strong>{item.capacity}</strong></td><td className="mono">{devices.find(d => d.id === item.deviceId)?.serial}</td><td><StatusBadge status={item.status} /></td></> : kind === "combos" ? <><td><div className="table-primary"><span className="row-icon"><Network size={14} /></span><div><strong>{item.id.toUpperCase()}</strong><small>{devices.find(d => d.id === item.deviceId)?.serial}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><strong>{item.capacity}</strong><small className="block text-muted">{hdds.find(h => h.id === item.hddId)?.serial}</small></td><td><strong>{item.connectedCameras}</strong> <small className="text-muted">/ {item.connectedCameras + item.availableChannels} channels</small></td><td><StatusBadge status={item.status} /></td></> : kind === "cameras" ? <><td><div className="table-primary"><span className="row-icon"><Camera size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.physicalLocation}</td><td><span className="mono">{item.combo.toUpperCase()}</span><small className="block text-muted">{combos.find(c => c.id === item.combo)?.location}</small></td><td><span className="mono">{item.ip}</span><small className="block text-muted">{item.type} · {item.megapixel}</small></td><td><StatusBadge status={item.status} /></td></> : <><td><div className="table-primary"><span className="row-icon"><IconComponent size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><span className="mono">{item.channels}</span> <small className="text-muted">channels</small></td><td className="mono">{item.warrantyExpiry}</td><td><StatusBadge status={item.status} /></td></>}<td><button className="icon-btn table-action" data-testid={`button-edit-${item.id}`} onClick={() => notify({ tone: "info", message: `Editing ${item.id.toUpperCase()} — form prefilled from the mock service.` })}><Pencil size={15} /></button><button className="icon-btn table-action" onClick={() => setConfirm(true)}><MoreHorizontal size={15} /></button></td></tr>)}</tbody></table></div>}<div className="table-foot"><span>Showing <strong>{filtered.length}</strong> of {source.length} records</span><div className="pagination"><button className="icon-btn" disabled><ChevronRight size={15} className="rotate-180" /></button><span className="page-current">1</span><button className="icon-btn" disabled><ChevronRight size={15} /></button></div></div></section>{modal && <CrudModal title={config[kind].add} type={modalType as any} onClose={() => setModal(false)} onSaved={() => { setModal(false); notify({ tone: "success", message: `${kind.slice(0, -1)} record saved to the Phase 1 data layer.` }); }} />}{confirm && <ConfirmModal title="Archive this record?" body="The record will be marked inactive and retained for traceability." onClose={() => setConfirm(false)} onConfirm={() => { setConfirm(false); notify({ tone: "success", message: "Record archived. Audit trail updated." }); }} />}</div>;
+
+  const pendingInvitesCount = invitations.filter(i => i.status === "PENDING" && i.remainingSeconds > 0).length;
+
+  return (
+    <div className="page-enter">
+      <PageHeader
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+        action={
+          <Button onClick={() => (kind === "users" ? setInviteModal(true) : setModal(true))}>
+            <Plus size={15} />
+            {config[kind].add}
+          </Button>
+        }
+      />
+      <div className="resource-summary">
+        <div className="summary-icon"><IconComponent size={20} /></div>
+        <div>
+          <strong>{source.length.toString().padStart(2, "0")}</strong>
+          <span>{kind === "users" ? "registered desk members" : kind === "locations" ? "managed locations" : kind === "combos" ? "active device combos" : "registered records"}</span>
+        </div>
+        {kind === "users" && pendingInvitesCount > 0 && (
+          <div style={{ marginLeft: "16px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(245, 158, 11, 0.15)", padding: "4px 12px", borderRadius: "999px", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+            <Timer size={14} className="text-amber-400" />
+            <span style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 500 }}>
+              {pendingInvitesCount} pending 10-min {pendingInvitesCount === 1 ? "invite" : "invites"} active
+            </span>
+          </div>
+        )}
+        <div className="summary-rule" />
+        <div className="summary-note"><span className="live-dot" />Live Atlas Data · Resend Integrated</div>
+      </div>
+
+      {kind === "users" && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          <button
+            className={`btn ${activeTab === "users" ? "btn-primary" : "btn-ghost"}`}
+            style={{ fontSize: "13px", padding: "6px 14px" }}
+            onClick={() => setActiveTab("users")}
+          >
+            <Users size={14} /> Active Members ({source.length})
+          </button>
+          <button
+            className={`btn ${activeTab === "invites" ? "btn-primary" : "btn-ghost"}`}
+            style={{ fontSize: "13px", padding: "6px 14px" }}
+            onClick={() => setActiveTab("invites")}
+          >
+            <Mail size={14} /> 10-Min Invitations ({invitations.length})
+          </button>
+        </div>
+      )}
+
+      {kind === "users" && activeTab === "invites" ? (
+        <section className="panel table-panel">
+          <div className="panel-head" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p className="eyebrow">RESEND MAILING DISPATCH</p>
+              <h2 style={{ fontSize: "16px", fontWeight: 600 }}>Active & Recent Invitations (10-Minute Expiry)</h2>
+            </div>
+            <Button variant="secondary" onClick={() => void loadUsersAndInvites()}>
+              <RefreshCw size={13} /> Refresh
+            </Button>
+          </div>
+          {invitations.length === 0 ? (
+            <EmptyState
+              title="No invitations sent yet"
+              body="Invite your colleagues to the operations desk. An email with a secure 10-minute code will be dispatched via Resend."
+              onAction={() => setInviteModal(true)}
+            />
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Recipient Email</th>
+                    <th>Role</th>
+                    <th>Organization</th>
+                    <th>10-Min Code</th>
+                    <th>Validity / Expiry</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invitations.map((inv, index) => {
+                    const isLive = inv.status === "PENDING" && inv.remainingSeconds > 0;
+                    return (
+                      <tr key={inv.id} className="table-row-enter" style={{ animationDelay: `${index * 30}ms` }}>
+                        <td>
+                          <div className="table-primary">
+                            <span className="row-icon"><Mail size={14} /></span>
+                            <div>
+                              <strong>{inv.email}</strong>
+                              <small className="text-muted">Invited by {inv.invitedByName}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span className="role-tag">{inv.role}</span></td>
+                        <td>{inv.organizationName ?? "CamOps Workspace"}</td>
+                        <td>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#0b0e14", padding: "3px 8px", borderRadius: "4px", border: "1px solid #334155" }}>
+                            <span className="mono font-bold" style={{ color: "#fbbf24", letterSpacing: "1px" }}>{inv.code}</span>
+                            <button
+                              className="icon-btn"
+                              style={{ width: "20px", height: "20px", padding: 0 }}
+                              title="Copy code"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(inv.code);
+                                notify({ tone: "info", message: `Code ${inv.code} copied to clipboard!` });
+                              }}
+                            >
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          {isLive ? (
+                            <span className="status-badge status-warning" style={{ fontFamily: "monospace" }}>
+                              <Timer size={12} /> {formatRemainingTime(inv.remainingSeconds)} left
+                            </span>
+                          ) : inv.status === "ACCEPTED" ? (
+                            <span className="status-badge status-healthy"><Check size={12} /> Used</span>
+                          ) : (
+                            <span className="status-badge status-danger">Expired</span>
+                          )}
+                        </td>
+                        <td>
+                          <StatusBadge status={inv.status === "PENDING" ? (isLive ? "Active" : "Expired") : inv.status} />
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <Button
+                              variant="ghost"
+                              style={{ fontSize: "12px", padding: "4px 8px" }}
+                              onClick={() => void handleResendInvite(inv.id, inv.email)}
+                              title="Re-issue fresh 10-minute code via Resend"
+                            >
+                              <Send size={12} /> Resend Email
+                            </Button>
+                            <button
+                              className="icon-btn"
+                              style={{ width: "26px", height: "26px" }}
+                              title="Copy Direct Registration Link"
+                              onClick={() => {
+                                const regUrl = `${window.location.origin}/register?email=${encodeURIComponent(inv.email)}&code=${encodeURIComponent(inv.code)}`;
+                                void navigator.clipboard.writeText(regUrl);
+                                notify({ tone: "info", message: `Registration link for ${inv.email} copied to clipboard!` });
+                              }}
+                            >
+                              <Link2 size={13} />
+                            </button>
+                            {inv.status === "PENDING" && (
+                              <button
+                                className="icon-btn"
+                                style={{ width: "26px", height: "26px" }}
+                                title="Cancel invitation"
+                                onClick={() => void handleCancelInvite(inv.id)}
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="panel table-panel">
+          <TableToolbar search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} placeholder={`Search ${kind} by name, serial, or location…`} />
+          {filtered.length === 0 ? (
+            <EmptyState
+              title="No matching records"
+              body="Try a different search or clear your filters to see the full register."
+              onAction={() => { setSearch(""); setFilter("All"); }}
+            />
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {kind === "locations" ? <><th>Location</th><th>Organization</th><th>Sub-locations</th><th>Status</th><th /></> :
+                     kind === "users" ? <><th>Person</th><th>Role</th><th>Organization</th><th>Last active</th><th>Status</th><th /></> :
+                     kind === "hdds" ? <><th>Drive</th><th>Serial</th><th>Capacity</th><th>Assigned device</th><th>Status</th><th /></> :
+                     kind === "combos" ? <><th>Combo / device</th><th>Location</th><th>Storage</th><th>Camera load</th><th>Status</th><th /></> :
+                     kind === "cameras" ? <><th>Camera</th><th>Physical location</th><th>Combo location</th><th>IP / type</th><th>Status</th><th /></> :
+                     <><th>Device</th><th>Location</th><th>Channels</th><th>Warranty</th><th>Status</th><th /></>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item: any, index: number) => (
+                    <tr key={item.id ?? item._id ?? index} className="table-row-enter" style={{ animationDelay: `${index * 35}ms` }}>
+                      {kind === "locations" ? (
+                        <><td><div className="table-primary"><span className="row-icon"><MapPin size={14} /></span><div><strong>{item.name}</strong><small>{item.address}</small></div></div></td><td>{item.organization}</td><td><span className="mono">{item.subLocations?.length?.toString()?.padStart(2, "0") ?? "00"}</span> areas</td><td><StatusBadge status={item.status} /></td></>
+                      ) : kind === "users" ? (
+                        <><td><div className="table-primary"><span className="avatar avatar-sm">{item.name ? item.name.split(" ").map((x: string) => x[0]).join("") : "US"}</span><div><strong>{item.name}</strong><small>{item.email}</small></div></div></td><td><span className="role-tag">{item.role}</span></td><td>{item.organizationName ?? item.organization ?? "CamOps"}</td><td className="mono text-muted">{item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : item.lastActive ?? "Never"}</td><td><StatusBadge status={item.status} /></td></>
+                      ) : kind === "hdds" ? (
+                        <><td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.manufacturer}</small></div></div></td><td className="mono">{item.serial}</td><td><strong>{item.capacity}</strong></td><td className="mono">{devices.find(d => d.id === item.deviceId)?.serial}</td><td><StatusBadge status={item.status} /></td></>
+                      ) : kind === "combos" ? (
+                        <><td><div className="table-primary"><span className="row-icon"><Network size={14} /></span><div><strong>{item.id.toUpperCase()}</strong><small>{devices.find(d => d.id === item.deviceId)?.serial}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><strong>{item.capacity}</strong><small className="block text-muted">{hdds.find(h => h.id === item.hddId)?.serial}</small></td><td><strong>{item.connectedCameras}</strong> <small className="text-muted">/ {item.connectedCameras + item.availableChannels} channels</small></td><td><StatusBadge status={item.status} /></td></>
+                      ) : kind === "cameras" ? (
+                        <><td><div className="table-primary"><span className="row-icon"><Camera size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.physicalLocation}</td><td><span className="mono">{item.combo.toUpperCase()}</span><small className="block text-muted">{combos.find(c => c.id === item.combo)?.location}</small></td><td><span className="mono">{item.ip}</span><small className="block text-muted">{item.type} · {item.megapixel}</small></td><td><StatusBadge status={item.status} /></td></>
+                      ) : (
+                        <><td><div className="table-primary"><span className="row-icon"><IconComponent size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><span className="mono">{item.channels}</span> <small className="text-muted">channels</small></td><td className="mono">{item.warrantyExpiry}</td><td><StatusBadge status={item.status} /></td></>
+                      )}
+                      <td>
+                        <button className="icon-btn table-action" data-testid={`button-edit-${item.id ?? item._id}`} onClick={() => notify({ tone: "info", message: `Viewing details for ${item.name ?? item.serial ?? item.id}` })}>
+                          <Pencil size={15} />
+                        </button>
+                        <button className="icon-btn table-action" onClick={() => setConfirm(true)}>
+                          <MoreHorizontal size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="table-foot">
+            <span>Showing <strong>{filtered.length}</strong> of {source.length} records</span>
+            <div className="pagination">
+              <button className="icon-btn" disabled><ChevronRight size={15} className="rotate-180" /></button>
+              <span className="page-current">1</span>
+              <button className="icon-btn" disabled><ChevronRight size={15} /></button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {modal && (
+        <CrudModal
+          title={config[kind].add}
+          type={modalType as any}
+          onClose={() => setModal(false)}
+          onSaved={() => {
+            setModal(false);
+            notify({ tone: "success", message: `${kind.slice(0, -1)} record saved.` });
+          }}
+        />
+      )}
+
+      {inviteModal && (
+        <InviteUserModal
+          currentUser={pageUser}
+          onClose={() => setInviteModal(false)}
+          onSent={(msg) => {
+            setInviteModal(false);
+            notify({ tone: "success", message: msg });
+            void loadUsersAndInvites();
+          }}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          title="Archive this record?"
+          body="The record will be marked inactive and retained for traceability."
+          onClose={() => setConfirm(false)}
+          onConfirm={() => {
+            setConfirm(false);
+            notify({ tone: "success", message: "Record archived. Audit trail updated." });
+          }}
+        />
+      )}
+    </div>
+  );
 }
+
 
 function DailyOperations({ notify }: { notify: (notice: Notice) => void }) {
   const [step, setStep] = useState(1);
@@ -181,33 +787,173 @@ function AuditPage() {
 
 function AuthPage({ register = false, onAuthenticated }: { register?: boolean; onAuthenticated: (user: SessionUser) => void }) {
   const [, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [email, setEmail] = useState("");
+  const [success, setSuccess] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [organizationCode, setOrganizationCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(searchParams.get("code") ?? "");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const submit = async () => {
     setLoading(true);
     setError("");
+    setSuccess("");
     try {
       if (register) {
-        const payload = { name, email, password, confirmPassword, organizationCode };
-        await registerAccount(payload);
-        setLocation("/login");
+        const payload = {
+          name,
+          email,
+          password,
+          confirmPassword,
+          inviteCode: inviteCode.trim(),
+          organizationCode: inviteCode.trim(),
+        };
+        const res = await registerAccount(payload);
+        if (res.user) {
+          setSuccess("Registration verified! Redirecting to your operations desk…");
+          setTimeout(() => {
+            onAuthenticated(res.user!);
+          }, 800);
+          return;
+        }
+        setSuccess(res.message || "Account registered successfully! Redirecting to sign in…");
+        setTimeout(() => {
+          setLocation("/login");
+        }, 1500);
         return;
       }
       const user = await loginWithEmail(email, password);
       onAuthenticated(user);
-    } catch (err) {
+    } catch (err: any) {
       setError(err instanceof Error ? err.message : "We couldn't verify those credentials. Check your email and password, then try again.");
     } finally {
       setLoading(false);
     }
   };
-  return <div className="auth-page noise"><div className="auth-art"><div className="auth-art-inner"><div className="brand brand-light"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-quote"><span className="eyebrow">CONTROL THE SIGNAL</span><h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1><p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p></div><div className="auth-art-foot"><span className="mono">NORTHSTAR / CONTROL ROOM</span><span>PHASE 1 PREVIEW</span></div></div></div><div className="auth-form-side"><div className="auth-form-wrap"><div className="mobile-auth-brand brand"><div className="brand-mark"><span className="brand-beam" /></div><div><strong>CamOps</strong><small>operations desk</small></div></div><div className="auth-heading"><p className="eyebrow">{register ? "INVITATION / ACCOUNT SETUP" : "SECURE ACCESS / 01"}</p><h2 className="display">{register ? "Set up your desk access." : "Welcome back."}</h2><p>{register ? "Your invitation controls your organization and access level. Elevated roles can only be assigned by an administrator." : "Sign in to continue to your operations desk."}</p></div>{error && <div className="auth-error"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError("")}><X size={14} /></button></div>}<div className="auth-fields">{register && <><Field label="Full name" placeholder="Your full name" value={name} onChange={setName} /><Field label="Invitation code" placeholder="Paste your invitation code" value={organizationCode} onChange={setOrganizationCode} /></> }<Field label="Work email" placeholder="name@organization.gov" value={email} onChange={setEmail} /><label className="field"><span>Password</span><div className="password-wrap"><input data-testid="input-password" type={show ? "text" : "password"} placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} /><button type="button" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>{register && <Field label="Confirm password" type="password" placeholder="Repeat your password" value={confirmPassword} onChange={setConfirmPassword} />}</div>{!register && <div className="auth-options"><label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label><button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button></div>}<Button className="auth-submit" onClick={submit} disabled={loading}>{loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}{!loading && <ArrowRight size={16} />}</Button>{!register ? <p className="auth-switch">Need an invited account? <Link href="/register">Set up access <ArrowRight size={14} /></Link></p> : <p className="auth-switch">Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link></p>}<p className="auth-footnote"><LockKeyhole size={13} /> Demo workspace · no production credentials accepted</p></div></div></div>;
+
+  return (
+    <div className="auth-page noise">
+      <div className="auth-art">
+        <div className="auth-art-inner">
+          <div className="brand brand-light">
+            <div className="brand-mark"><span className="brand-beam" /></div>
+            <div><strong>CamOps</strong><small>operations desk</small></div>
+          </div>
+          <div className="auth-quote">
+            <span className="eyebrow">CONTROL THE SIGNAL</span>
+            <h1 className="display">Clarity when<br /><em>everything</em> is moving.</h1>
+            <p>Infrastructure visibility for the teams keeping people, places, and systems moving.</p>
+          </div>
+          <div className="auth-art-foot">
+            <span className="mono">NORTHSTAR / CONTROL ROOM</span>
+            <span>PHASE 1 PREVIEW</span>
+          </div>
+        </div>
+      </div>
+      <div className="auth-form-side">
+        <div className="auth-form-wrap">
+          <div className="mobile-auth-brand brand">
+            <div className="brand-mark"><span className="brand-beam" /></div>
+            <div><strong>CamOps</strong><small>operations desk</small></div>
+          </div>
+          <div className="auth-heading">
+            <p className="eyebrow">{register ? "INVITATION / 10-MIN ACCESS SETUP" : "SECURE ACCESS / 01"}</p>
+            <h2 className="display">{register ? "Set up your desk access." : "Welcome back."}</h2>
+            <p>
+              {register
+                ? "Enter the 10-minute invite code sent to your email to complete registration."
+                : "Sign in to continue to your operations desk."}
+            </p>
+          </div>
+          {error && (
+            <div className="auth-error">
+              <AlertTriangle size={17} />
+              <span>{error}</span>
+              <button onClick={() => setError("")}><X size={14} /></button>
+            </div>
+          )}
+          {success && (
+            <div className="auth-success" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.4)", borderRadius: "6px", color: "#34d399", fontSize: "13px", marginBottom: "16px" }}>
+              <CheckCircle2 size={17} />
+              <span>{success}</span>
+            </div>
+          )}
+          <div className="auth-fields">
+            {register && (
+              <>
+                <Field label="Full name *" placeholder="Your full name" value={name} onChange={setName} />
+                <label className="field">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>10-Minute Invite Code *</span>
+                    <span style={{ fontSize: "11px", color: "#f59e0b", display: "flex", alignItems: "center", gap: "3px" }}>
+                      <Clock size={11} /> 10m validity
+                    </span>
+                  </div>
+                  <input
+                    data-testid="input-invitation-code"
+                    type="text"
+                    placeholder="Enter 6-digit code from email"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    style={{ letterSpacing: "2px", fontWeight: "600" }}
+                  />
+                </label>
+              </>
+            )}
+            <Field label="Work email *" placeholder="name@organization.gov" value={email} onChange={setEmail} />
+            <label className="field">
+              <span>Password *</span>
+              <div className="password-wrap">
+                <input
+                  data-testid="input-password"
+                  type={show ? "text" : "password"}
+                  placeholder="Enter your password (min. 8 chars)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button type="button" onClick={() => setShow(!show)}>
+                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </label>
+            {register && (
+              <Field
+                label="Confirm password *"
+                type="password"
+                placeholder="Repeat your password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+              />
+            )}
+          </div>
+          {!register && (
+            <div className="auth-options">
+              <label className="check-label"><input type="checkbox" /> <span>Remember this device</span></label>
+              <button className="text-link" onClick={() => setError("Password reset instructions are prepared for the Phase 2 identity service.")}>Forgot password?</button>
+            </div>
+          )}
+          <Button className="auth-submit" onClick={submit} disabled={loading}>
+            {loading ? "Verifying access…" : register ? "Complete account setup" : "Sign in to CamOps"}
+            {!loading && <ArrowRight size={16} />}
+          </Button>
+          {!register ? (
+            <p className="auth-switch">
+              Have an invitation code? <Link href="/register">Set up access <ArrowRight size={14} /></Link>
+            </p>
+          ) : (
+            <p className="auth-switch">
+              Already set up? <Link href="/login">Return to sign in <ArrowRight size={14} /></Link>
+            </p>
+          )}
+          <p className="auth-footnote"><LockKeyhole size={13} /> Secured operations desk · Invitation required</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function RoutedApp() {
@@ -260,13 +1006,13 @@ function RoutedApp() {
   const role = user ? (user.role === "SUPER_ADMIN" ? "Super Admin" : user.role === "ADMIN" ? "Admin" : "Operator") : "Operator";
   let page: ReactNode;
   if (location === "/" || location === "/dashboard") page = <Dashboard userName={user?.name ?? "Operator"} role={role} notify={notify} />;
-  else if (location === "/locations") page = <ResourcePage kind="locations" eyebrow="INFRASTRUCTURE / TOPOLOGY" title="Locations" description="Keep every site and sub-location legible to the people on shift." notify={notify} />;
-  else if (location === "/infrastructure/nvrs") page = <ResourcePage kind="nvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="NVR register" description="Network video recorders, channel capacity, and placement in one dependable register." notify={notify} />;
-  else if (location === "/infrastructure/dvrs") page = <ResourcePage kind="dvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="DVR register" description="Track legacy recording assets with the same operational discipline." notify={notify} />;
-  else if (location === "/infrastructure/hdds") page = <ResourcePage kind="hdds" eyebrow="INFRASTRUCTURE / STORAGE" title="HDD register" description="One drive per NVR or DVR. Capacity and traceability stay visible." notify={notify} />;
-  else if (location === "/infrastructure/combos") page = <ResourcePage kind="combos" eyebrow="INFRASTRUCTURE / CONFIGURATION" title="Device combos" description="See the relationship between recorder, storage, location, and connected cameras." notify={notify} />;
-  else if (location === "/cameras") page = <ResourcePage kind="cameras" eyebrow="INFRASTRUCTURE / CCTV" title="Camera register" description="Searchable, sortable-ready camera inventory with physical and combo locations kept distinct." notify={notify} />;
-  else if (location === "/users") page = <ResourcePage kind="users" eyebrow="ADMINISTRATION / ACCESS" title="People & access" description="Invite, activate, and keep a clean view of who can touch the desk." notify={notify} />;
+  else if (location === "/locations") page = <ResourcePage kind="locations" eyebrow="INFRASTRUCTURE / TOPOLOGY" title="Locations" description="Keep every site and sub-location legible to the people on shift." notify={notify} currentUser={user} />;
+  else if (location === "/infrastructure/nvrs") page = <ResourcePage kind="nvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="NVR register" description="Network video recorders, channel capacity, and placement in one dependable register." notify={notify} currentUser={user} />;
+  else if (location === "/infrastructure/dvrs") page = <ResourcePage kind="dvrs" eyebrow="INFRASTRUCTURE / DEVICES" title="DVR register" description="Track legacy recording assets with the same operational discipline." notify={notify} currentUser={user} />;
+  else if (location === "/infrastructure/hdds") page = <ResourcePage kind="hdds" eyebrow="INFRASTRUCTURE / STORAGE" title="HDD register" description="One drive per NVR or DVR. Capacity and traceability stay visible." notify={notify} currentUser={user} />;
+  else if (location === "/infrastructure/combos") page = <ResourcePage kind="combos" eyebrow="INFRASTRUCTURE / CONFIGURATION" title="Device combos" description="See the relationship between recorder, storage, location, and connected cameras." notify={notify} currentUser={user} />;
+  else if (location === "/cameras") page = <ResourcePage kind="cameras" eyebrow="INFRASTRUCTURE / CCTV" title="Camera register" description="Searchable, sortable-ready camera inventory with physical and combo locations kept distinct." notify={notify} currentUser={user} />;
+  else if (location === "/users") page = <ResourcePage kind="users" eyebrow="ADMINISTRATION / ACCESS" title="People & access" description="Invite, activate, and manage who can access the operations desk." notify={notify} currentUser={user} />;
   else if (location === "/operations/daily") page = <DailyOperations notify={notify} />;
   else if (location === "/operations/failures") page = <FailuresPage notify={notify} />;
   else if (location === "/lifecycle/replacements") page = <ReplacementsPage notify={notify} />;
