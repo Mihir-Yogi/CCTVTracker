@@ -13,6 +13,22 @@ import {
   X, LockKeyhole, Radio, MapPin, KeyRound, Download, Mail, Send, Copy, Timer, Clock, Link2
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import { ComboRegistrationModal } from "@/components/ComboRegistrationModal";
+import { ComboDetailsModal } from "@/components/ComboDetailsModal";
+import {
+  fetchCombos,
+  fetchNvrs,
+  fetchDvrs,
+  fetchHdds,
+  createNvr,
+  createDvr,
+  createHdd,
+  fetchComboById,
+  type ApiCombo,
+  type ApiNvr,
+  type ApiDvr,
+  type ApiHdd,
+} from "@/lib/combo-client";
 import {
   auditLogs, cameras, combos, currentUser, devices, failureReasons, failures, hdds, locations,
   replacements, statuses, users, type AssetStatus,
@@ -119,8 +135,8 @@ function TableToolbar({ search, setSearch, filter, setFilter, placeholder = "Sea
   return <div className="table-toolbar"><label className="search-field"><Search size={16} /><input data-testid="input-search-records" value={search} onChange={e => setSearch(e.target.value)} placeholder={placeholder} /></label>{setFilter && <select data-testid="select-filter-records" value={filter} onChange={e => setFilter(e.target.value)}><option value="All">All statuses</option>{statuses.map(status => <option key={status}>{status}</option>)}</select>}<Button variant="ghost"><SlidersHorizontal size={15} /> Filters</Button></div>;
 }
 
-function EmptyState({ title, body, onAction }: { title: string; body: string; onAction?: () => void }) {
-  return <div className="empty-state"><div className="empty-mark"><Radio size={22} /></div><h3>{title}</h3><p>{body}</p>{onAction && <Button onClick={onAction}><Plus size={15} /> Add first record</Button>}</div>;
+function EmptyState({ title, body, onAction, actionLabel = "Add first record" }: { title: string; body: string; onAction?: () => void; actionLabel?: string }) {
+  return <div className="empty-state"><div className="empty-mark"><Radio size={22} /></div><h3>{title}</h3><p>{body}</p>{onAction && <Button onClick={onAction}><Plus size={15} /> {actionLabel}</Button>}</div>;
 }
 
 function Shell({ user, onLogout, children, notify }: { user: SessionUser; onLogout: () => void; children: ReactNode; notify: (notice: Notice) => void }) {
@@ -141,7 +157,30 @@ function Shell({ user, onLogout, children, notify }: { user: SessionUser; onLogo
       <div className="sidebar-footer"><div className="system-status"><span className="live-dot" /><div><strong>All systems monitored</strong><small>Last sync 2 min ago</small></div></div><div className="sidebar-footer-row"><span className="mono">PHASE 1.0</span><span className="sidebar-version">NTA / 03</span></div></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu icon-btn" onClick={() => setMobileOpen(true)}><Menu size={19} /></button><div className="breadcrumb"><span>CamOps</span><ChevronRight size={14} /><strong>{location === "/dashboard" ? "Overview" : location.split("/").filter(Boolean).map(x => x.replaceAll("-", " ")).join(" / ")}</strong></div><div className="topbar-actions"><div className={`global-search ${searchOpen ? "search-expanded" : ""}`}><Search size={16} /><input data-testid="input-global-search" onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 120)} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} placeholder="Search CamOps" /><kbd>⌘ K</kbd></div><button data-testid="button-notifications" className="icon-btn notification-btn" onClick={() => notify({ tone: "info", message: "No new critical notifications. You are all caught up." })}><Bell size={17} /><i /></button><div className="account-wrap"><button data-testid="button-account-menu" className="account-button" onClick={() => setAccountOpen(!accountOpen)}><span className="avatar">{initials}</span><span className="account-copy"><strong>{user.name}</strong><small>{roleLabel}</small></span><ChevronDown size={14} /></button>{accountOpen && <div className="account-menu page-enter"><div className="account-menu-head"><span className="avatar avatar-large">{initials}</span><div><strong>{user.name}</strong><small>{user.organizationName ?? "Workspace account"}</small></div></div><div className="role-label">Signed in as</div><div className="role-option role-selected"><span className="role-pip" />{roleLabel}{role === "SUPER_ADMIN" || role === "ADMIN" ? <Check size={14} /> : null}</div><div className="menu-divider" /><button className="menu-link" onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
+      <header className="topbar">
+        <button className="mobile-menu icon-btn" onClick={() => setMobileOpen(true)}><Menu size={19} /></button>
+        <div className="breadcrumb"><span>CamOps</span><ChevronRight size={14} /><strong>{location === "/dashboard" ? "Overview" : location.split("/").filter(Boolean).map(x => x.replaceAll("-", " ")).join(" / ")}</strong></div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "14px", flexWrap: "wrap" }}>
+          <Link href="/infrastructure/combos" style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: location === "/infrastructure/combos" ? "#38bdf8" : "#94a3b8", background: location === "/infrastructure/combos" ? "rgba(56, 189, 248, 0.15)" : "transparent", border: location === "/infrastructure/combos" ? "1px solid rgba(56, 189, 248, 0.3)" : "none", textDecoration: "none" }}>
+            View NVR/DVR/HDD
+          </Link>
+          <Link href="/infrastructure/nvrs" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "12px", color: location === "/infrastructure/nvrs" ? "#f1f5f9" : "#94a3b8", background: location === "/infrastructure/nvrs" ? "#1e293b" : "transparent", textDecoration: "none" }}>
+            NVRs
+          </Link>
+          <Link href="/infrastructure/dvrs" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "12px", color: location === "/infrastructure/dvrs" ? "#f1f5f9" : "#94a3b8", background: location === "/infrastructure/dvrs" ? "#1e293b" : "transparent", textDecoration: "none" }}>
+            DVRs
+          </Link>
+          <Link href="/infrastructure/hdds" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "12px", color: location === "/infrastructure/hdds" ? "#f1f5f9" : "#94a3b8", background: location === "/infrastructure/hdds" ? "#1e293b" : "transparent", textDecoration: "none" }}>
+            HDDs
+          </Link>
+          <Link href="/cameras" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "12px", color: location === "/cameras" ? "#f1f5f9" : "#94a3b8", background: location === "/cameras" ? "#1e293b" : "transparent", textDecoration: "none" }}>
+            CCTVs
+          </Link>
+          <Link href="/operations/daily" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "12px", color: location === "/operations/daily" ? "#f1f5f9" : "#94a3b8", background: location === "/operations/daily" ? "#1e293b" : "transparent", textDecoration: "none" }}>
+            Transactions
+          </Link>
+        </div>
+        <div className="topbar-actions"><div className={`global-search ${searchOpen ? "search-expanded" : ""}`}><Search size={16} /><input data-testid="input-global-search" onFocus={() => setSearchOpen(true)} onBlur={() => setTimeout(() => setSearchOpen(false), 120)} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} placeholder="Search CamOps" /><kbd>⌘ K</kbd></div><button data-testid="button-notifications" className="icon-btn notification-btn" onClick={() => notify({ tone: "info", message: "No new critical notifications. You are all caught up." })}><Bell size={17} /><i /></button><div className="account-wrap"><button data-testid="button-account-menu" className="account-button" onClick={() => setAccountOpen(!accountOpen)}><span className="avatar">{initials}</span><span className="account-copy"><strong>{user.name}</strong><small>{roleLabel}</small></span><ChevronDown size={14} /></button>{accountOpen && <div className="account-menu page-enter"><div className="account-menu-head"><span className="avatar avatar-large">{initials}</span><div><strong>{user.name}</strong><small>{user.organizationName ?? "Workspace account"}</small></div></div><div className="role-label">Signed in as</div><div className="role-option role-selected"><span className="role-pip" />{roleLabel}{role === "SUPER_ADMIN" || role === "ADMIN" ? <Check size={14} /> : null}</div><div className="menu-divider" /><button className="menu-link" onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div></div></header>
       <div className="content">{children}</div>
     </main>
   </div>;
@@ -163,13 +202,172 @@ function Dashboard({ userName, role, notify }: { userName: string; role: Role; n
   </div>;
 }
 
-function CrudModal({ title, type, onClose, onSaved }: { title: string; type: "location" | "device" | "hdd" | "camera" | "user"; onClose: () => void; onSaved: () => void }) {
+function CrudModal({
+  title,
+  type,
+  onClose,
+  onSaved,
+}: {
+  title: string;
+  type: "location" | "nvr" | "dvr" | "hdd" | "camera" | "user" | "device";
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [serial, setSerial] = useState("");
-  const save = () => { setSaving(true); setTimeout(() => { setSaving(false); onSaved(); }, 650); };
-  const labels = { location: ["Location name", "e.g. North Annex"], device: ["Device model", "e.g. DS-7732NI-I4"], hdd: ["HDD model", "e.g. Purple WD42PURZ"], camera: ["Camera model", "e.g. P3265-LV"], user: ["Full name", "e.g. Jordan Lee"] };
-  return <Modal title={title} description="Fields marked with an asterisk are required. New records are captured in the Phase 1 audit trail." onClose={onClose} onSave={save} saving={saving}><div className="form-grid"><Field label={`${labels[type][0]} *`} placeholder={labels[type][1]} value={name} onChange={setName} />{type !== "user" && <Field label="Serial number *" placeholder="e.g. NTA-4403-AX" value={serial} onChange={setSerial} />}{type === "device" && <><SelectField label="Device type" options={["NVR", "DVR"]} value="NVR" /><Field label="Channels" placeholder="32" /></>}{type === "camera" && <><SelectField label="Camera type" options={["Dome", "Bullet", "PTZ", "Turret"]} value="Dome" /><Field label="IP address" placeholder="10.24.1.25" /></>}{type === "hdd" && <SelectField label="Capacity" options={["2 TB", "4 TB", "8 TB", "12 TB"]} value="4 TB" />}{type === "location" && <><Field label="Address" placeholder="Street address" /><Field label="Description" placeholder="What is covered here?" /></>}{type === "user" && <><Field label="Email address *" placeholder="name@organization.gov" /><SelectField label="Access role" options={["Operator", "Admin"]} value="Operator" /></>}</div></Modal>;
+  const [brand, setBrand] = useState("");
+  const [ipAddress, setIpAddress] = useState("");
+  const [channels, setChannels] = useState(type === "dvr" ? "16" : "32");
+  const [capacity, setCapacity] = useState("4 TB");
+
+  const save = async () => {
+    setError("");
+    if (type === "nvr") {
+      if (!name.trim() || !serial.trim()) {
+        setError("NVR Model and Serial Number are required.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await createNvr({
+          model: name.trim(),
+          serialNumber: serial.trim(),
+          brand: brand.trim() || "Hikvision",
+          ipAddress: ipAddress.trim() || undefined,
+          channels: Number(channels) || 32,
+          status: "Working",
+        });
+        onSaved();
+      } catch (err: any) {
+        setError(err?.message || "Failed to register NVR.");
+      } finally {
+        setSaving(false);
+      }
+    } else if (type === "dvr") {
+      if (!name.trim() || !serial.trim()) {
+        setError("DVR Model and Serial Number are required.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await createDvr({
+          model: name.trim(),
+          serialNumber: serial.trim(),
+          brand: brand.trim() || "Hanwha",
+          ipAddress: ipAddress.trim() || undefined,
+          channels: Number(channels) || 16,
+          status: "Working",
+        });
+        onSaved();
+      } catch (err: any) {
+        setError(err?.message || "Failed to register DVR.");
+      } finally {
+        setSaving(false);
+      }
+    } else if (type === "hdd") {
+      if (!name.trim() || !serial.trim() || !capacity.trim()) {
+        setError("HDD Model, Serial Number, and Capacity are required.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await createHdd({
+          model: name.trim(),
+          serialNumber: serial.trim(),
+          brand: brand.trim() || "Western Digital",
+          capacity: capacity.trim(),
+          status: "Working",
+        });
+        onSaved();
+      } catch (err: any) {
+        setError(err?.message || "Failed to register HDD.");
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      setSaving(true);
+      setTimeout(() => {
+        setSaving(false);
+        onSaved();
+      }, 650);
+    }
+  };
+
+  const labels: Record<string, [string, string]> = {
+    location: ["Location name", "e.g. North Annex"],
+    nvr: ["NVR Model", "e.g. DS-7732NI-I4"],
+    dvr: ["DVR Model", "e.g. HRD-820"],
+    hdd: ["HDD Model", "e.g. Purple WD42PURZ"],
+    camera: ["Camera model", "e.g. P3265-LV"],
+    user: ["Full name", "e.g. Jordan Lee"],
+    device: ["Device model", "e.g. DS-7732NI-I4"],
+  };
+
+  return (
+    <Modal
+      title={title}
+      description="Fields marked with an asterisk are required. Records are committed directly to MongoDB Atlas."
+      onClose={onClose}
+      onSave={save}
+      saving={saving}
+    >
+      <div className="form-grid">
+        {error && (
+          <div className="auth-error col-span-full" style={{ marginBottom: "10px" }}>
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+        <Field
+          label={`${labels[type]?.[0] || "Model"} *`}
+          placeholder={labels[type]?.[1] || "e.g. Model Number"}
+          value={name}
+          onChange={setName}
+        />
+        {type !== "user" && (
+          <Field
+            label="Serial number *"
+            placeholder="e.g. NTA-4403-AX"
+            value={serial}
+            onChange={setSerial}
+          />
+        )}
+        {(type === "nvr" || type === "dvr" || type === "device") && (
+          <>
+            <Field label="Brand / Manufacturer" placeholder="Hikvision / Dahua" value={brand} onChange={setBrand} />
+            <Field label="IP Address" placeholder="192.168.1.100" value={ipAddress} onChange={setIpAddress} />
+            <Field label="Channels" placeholder={type === "dvr" ? "16" : "32"} value={channels} onChange={setChannels} />
+          </>
+        )}
+        {type === "hdd" && (
+          <>
+            <Field label="Brand" placeholder="Western Digital / Seagate" value={brand} onChange={setBrand} />
+            <SelectField label="Capacity" options={["1 TB", "2 TB", "4 TB", "6 TB", "8 TB", "12 TB", "16 TB"]} value={capacity} onChange={setCapacity} />
+          </>
+        )}
+        {type === "camera" && (
+          <>
+            <SelectField label="Camera type" options={["Dome", "Bullet", "PTZ", "Turret"]} value="Dome" />
+            <Field label="IP address" placeholder="10.24.1.25" />
+          </>
+        )}
+        {type === "location" && (
+          <>
+            <Field label="Address" placeholder="Street address" />
+            <Field label="Description" placeholder="What is covered here?" />
+          </>
+        )}
+        {type === "user" && (
+          <>
+            <Field label="Email address *" placeholder="name@organization.gov" />
+            <SelectField label="Access role" options={["Operator", "Admin"]} value="Operator" />
+          </>
+        )}
+      </div>
+    </Modal>
+  );
 }
 
 function InviteUserModal({
@@ -412,19 +610,103 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
   const [confirm, setConfirm] = useState(false);
   const [invitations, setInvitations] = useState<UserInvitation[]>([]);
   const [realUsers, setRealUsers] = useState<SessionUser[]>([]);
+  const [realCombos, setRealCombos] = useState<ApiCombo[]>([]);
+  const [realNvrs, setRealNvrs] = useState<ApiNvr[]>([]);
+  const [realDvrs, setRealDvrs] = useState<ApiDvr[]>([]);
+  const [realHdds, setRealHdds] = useState<ApiHdd[]>([]);
+  const [comboModalOpen, setComboModalOpen] = useState(false);
+  const [selectedComboDetails, setSelectedComboDetails] = useState<ApiCombo | null>(null);
   const [activeTab, setActiveTab] = useState<"users" | "invites">("users");
+  // Track whether initial DB fetch has completed so we never show mock data
+  const [dataLoaded, setDataLoaded] = useState(false);
 
-  const loadUsersAndInvites = async () => {
+  const loadResourceData = async () => {
     if (kind === "users") {
-      const [uList, invList] = await Promise.all([fetchUsers(), getInvitations()]);
-      if (uList.length > 0) setRealUsers(uList);
-      setInvitations(invList);
+      try {
+        const [uList, invList] = await Promise.all([fetchUsers(), getInvitations()]);
+        setRealUsers(uList);
+        setInvitations(invList);
+      } catch (e) {
+        console.error("Failed to fetch users", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    } else if (kind === "combos") {
+      try {
+        const cList = await fetchCombos();
+        setRealCombos(cList);
+      } catch (e) {
+        console.error("Failed to fetch combos", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    } else if (kind === "nvrs") {
+      try {
+        const nList = await fetchNvrs();
+        setRealNvrs(nList);
+      } catch (e) {
+        console.error("Failed to fetch nvrs", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    } else if (kind === "dvrs") {
+      try {
+        const dList = await fetchDvrs();
+        setRealDvrs(dList);
+      } catch (e) {
+        console.error("Failed to fetch dvrs", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    } else if (kind === "hdds") {
+      try {
+        const hList = await fetchHdds();
+        setRealHdds(hList);
+      } catch (e) {
+        console.error("Failed to fetch hdds", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    } else {
+      setDataLoaded(true);
     }
   };
 
   useEffect(() => {
-    void loadUsersAndInvites();
+    setDataLoaded(false);
+    void loadResourceData();
   }, [kind]);
+
+  const handleViewCombo = async (comboRef: any) => {
+    if (!comboRef) return;
+    // If we already have a fully-populated combo object, display it directly
+    if (typeof comboRef === "object" && (comboRef.nvrId || comboRef.dvrId || comboRef.hddId || comboRef.comboCode)) {
+      // If nvrId/dvrId/hddId are populated objects we can display right away;
+      // otherwise fetch from API to get populated version
+      const hasPopulatedDevices =
+        (comboRef.nvrId == null || typeof comboRef.nvrId === "object") &&
+        (comboRef.dvrId == null || typeof comboRef.dvrId === "object") &&
+        (comboRef.hddId == null || typeof comboRef.hddId === "object");
+      if (hasPopulatedDevices) {
+        setSelectedComboDetails(comboRef);
+        return;
+      }
+    }
+    const identifier = typeof comboRef === "object" ? (comboRef._id || comboRef.comboCode || comboRef.id) : String(comboRef);
+    // Try in-memory cache first (already populated)
+    const cached = realCombos.find(c => c._id === identifier || c.comboCode === identifier);
+    if (cached) {
+      setSelectedComboDetails(cached);
+      return;
+    }
+    // Fetch from real API
+    try {
+      const found = await fetchComboById(identifier);
+      setSelectedComboDetails(found);
+    } catch {
+      notify({ tone: "info", message: `Could not load combo details for ${identifier}.` });
+    }
+  };
 
   // Live countdown timer for active invitations
   useEffect(() => {
@@ -449,7 +731,7 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
     try {
       const res = await resendUserInvitation(invId);
       notify({ tone: "success", message: `New 10-minute code dispatched to ${email} via Resend!` });
-      void loadUsersAndInvites();
+      void loadResourceData();
     } catch (err: any) {
       notify({ tone: "error", message: err?.message ?? "Failed to resend invitation code." });
     }
@@ -459,17 +741,53 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
     try {
       await cancelUserInvitation(invId);
       notify({ tone: "info", message: "Invitation cancelled." });
-      void loadUsersAndInvites();
+      void loadResourceData();
     } catch (err: any) {
       notify({ tone: "error", message: err?.message ?? "Failed to cancel invitation." });
     }
   };
 
-  const source = kind === "locations" ? locations : kind === "nvrs" ? devices.filter(d => d.type === "NVR") : kind === "dvrs" ? devices.filter(d => d.type === "DVR") : kind === "hdds" ? hdds : kind === "combos" ? combos : kind === "cameras" ? cameras : (realUsers.length > 0 ? realUsers : users);
+  const source =
+    kind === "locations"
+      ? locations
+      : kind === "nvrs"
+      ? realNvrs
+      : kind === "dvrs"
+      ? realDvrs
+      : kind === "hdds"
+      ? realHdds
+      : kind === "combos"
+      ? realCombos
+      : kind === "cameras"
+      ? cameras
+      : [];
   const filtered = source.filter((item: any) => JSON.stringify(item).toLowerCase().includes(search.toLowerCase()) && (filter === "All" || item.status === filter));
-  const config: Record<string, { icon: Icon; add: string }> = { locations: { icon: MapPin, add: "Register location" }, nvrs: { icon: Server, add: "Register NVR" }, dvrs: { icon: Database, add: "Register DVR" }, hdds: { icon: HardDrive, add: "Register HDD" }, combos: { icon: Network, add: "Create combo" }, cameras: { icon: Camera, add: "Register camera" }, users: { icon: Users, add: "Invite user (Send email)" } };
+
+
+  const config: Record<string, { icon: Icon; add: string }> = {
+    locations: { icon: MapPin, add: "Register location" },
+    nvrs: { icon: Server, add: "Register NVR" },
+    dvrs: { icon: Database, add: "Register DVR" },
+    hdds: { icon: HardDrive, add: "Register HDD" },
+    combos: { icon: Network, add: "Add NVR, DVR, HDD Combo" },
+    cameras: { icon: Camera, add: "Register camera" },
+    users: { icon: Users, add: "Invite user (Send email)" },
+  };
   const IconComponent = config[kind].icon;
-  const modalType = kind === "locations" ? "location" : kind === "hdds" ? "hdd" : kind === "cameras" ? "camera" : kind === "users" ? "user" : "device";
+  const modalType =
+    kind === "locations"
+      ? "location"
+      : kind === "nvrs"
+      ? "nvr"
+      : kind === "dvrs"
+      ? "dvr"
+      : kind === "hdds"
+      ? "hdd"
+      : kind === "cameras"
+      ? "camera"
+      : kind === "users"
+      ? "user"
+      : "device";
 
   const pendingInvitesCount = invitations.filter(i => i.status === "PENDING" && i.remainingSeconds > 0).length;
 
@@ -480,10 +798,20 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
         title={title}
         description={description}
         action={
-          <Button onClick={() => (kind === "users" ? setInviteModal(true) : setModal(true))}>
-            <Plus size={15} />
-            {config[kind].add}
-          </Button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <Button
+              onClick={() =>
+                kind === "users"
+                  ? setInviteModal(true)
+                  : kind === "combos"
+                  ? setComboModalOpen(true)
+                  : setModal(true)
+              }
+            >
+              <Plus size={15} />
+              {config[kind].add}
+            </Button>
+          </div>
         }
       />
       <div className="resource-summary">
@@ -530,7 +858,7 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
               <p className="eyebrow">RESEND MAILING DISPATCH</p>
               <h2 style={{ fontSize: "16px", fontWeight: 600 }}>Active & Recent Invitations (10-Minute Expiry)</h2>
             </div>
-            <Button variant="secondary" onClick={() => void loadUsersAndInvites()}>
+            <Button variant="secondary" onClick={() => void loadResourceData()}>
               <RefreshCw size={13} /> Refresh
             </Button>
           </div>
@@ -645,11 +973,53 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
       ) : (
         <section className="panel table-panel">
           <TableToolbar search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} placeholder={`Search ${kind} by name, serial, or location…`} />
-          {filtered.length === 0 ? (
+          {!dataLoaded && kind !== "locations" && kind !== "cameras" ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", padding: "48px 24px", color: "#8b949e", fontSize: "13px" }}>
+              <RefreshCw size={18} style={{ animation: "spin 1s linear infinite" }} />
+              <span>Loading records from MongoDB Atlas…</span>
+            </div>
+          ) : filtered.length === 0 ? (
             <EmptyState
-              title="No matching records"
-              body="Try a different search or clear your filters to see the full register."
-              onAction={() => { setSearch(""); setFilter("All"); }}
+              title={
+                kind === "nvrs"
+                  ? "No NVRs registered"
+                  : kind === "dvrs"
+                  ? "No DVRs registered"
+                  : kind === "hdds"
+                  ? "No HDDs registered"
+                  : kind === "combos"
+                  ? "No Combo registrations found"
+                  : "No matching records"
+              }
+              body={
+                kind === "combos"
+                  ? "Use the Add Combo button to create your first NVR/DVR + HDD combo record in MongoDB Atlas."
+                  : kind === "nvrs"
+                  ? "Register your first NVR device in MongoDB Atlas."
+                  : kind === "dvrs"
+                  ? "Register your first DVR device in MongoDB Atlas."
+                  : kind === "hdds"
+                  ? "Register your first HDD drive in MongoDB Atlas."
+                  : "Try a different search or clear your filters to see the full register."
+              }
+              onAction={
+                kind === "combos"
+                  ? () => setComboModalOpen(true)
+                  : kind === "nvrs" || kind === "dvrs" || kind === "hdds"
+                  ? () => setModal(true)
+                  : () => { setSearch(""); setFilter("All"); }
+              }
+              actionLabel={
+                kind === "combos"
+                  ? "Add Device Combo"
+                  : kind === "nvrs"
+                  ? "Register NVR"
+                  : kind === "dvrs"
+                  ? "Register DVR"
+                  : kind === "hdds"
+                  ? "Register HDD"
+                  : undefined
+              }
             />
           ) : (
             <div className="table-scroll">
@@ -658,38 +1028,162 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
                   <tr>
                     {kind === "locations" ? <><th>Location</th><th>Organization</th><th>Sub-locations</th><th>Status</th><th /></> :
                      kind === "users" ? <><th>Person</th><th>Role</th><th>Organization</th><th>Last active</th><th>Status</th><th /></> :
-                     kind === "hdds" ? <><th>Drive</th><th>Serial</th><th>Capacity</th><th>Assigned device</th><th>Status</th><th /></> :
-                     kind === "combos" ? <><th>Combo / device</th><th>Location</th><th>Storage</th><th>Camera load</th><th>Status</th><th /></> :
+                     kind === "hdds" ? <><th>Drive / Model</th><th>Serial Number</th><th>Capacity</th><th>Linked Combo</th><th>Status</th><th /></> :
+                     kind === "combos" ? <><th>Combo ID / Name</th><th>Customer / Depot</th><th>Location</th><th>NVR Component</th><th>DVR Component</th><th>HDD Storage</th><th>Status</th><th>Registration Date</th><th /></> :
                      kind === "cameras" ? <><th>Camera</th><th>Physical location</th><th>Combo location</th><th>IP / type</th><th>Status</th><th /></> :
-                     <><th>Device</th><th>Location</th><th>Channels</th><th>Warranty</th><th>Status</th><th /></>}
+                     <><th>Device / Model</th><th>Serial Number</th><th>Location</th><th>Channels</th><th>Linked Combo</th><th>Status</th><th /></>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((item: any, index: number) => (
+                  {filtered.map((item: any, index: number) => {
+                    const comboIdVal = item.comboId?._id || item.comboId?.comboCode || item.comboId || item.comboCode;
+                    const comboLabel = typeof item.comboId === "object" && item.comboId?.comboCode ? item.comboId.comboCode : (item.comboCode || (typeof comboIdVal === "string" && comboIdVal.length < 20 ? comboIdVal : "Linked"));
+                    return (
                     <tr key={item.id ?? item._id ?? index} className="table-row-enter" style={{ animationDelay: `${index * 35}ms` }}>
                       {kind === "locations" ? (
                         <><td><div className="table-primary"><span className="row-icon"><MapPin size={14} /></span><div><strong>{item.name}</strong><small>{item.address}</small></div></div></td><td>{item.organization}</td><td><span className="mono">{item.subLocations?.length?.toString()?.padStart(2, "0") ?? "00"}</span> areas</td><td><StatusBadge status={item.status} /></td></>
                       ) : kind === "users" ? (
                         <><td><div className="table-primary"><span className="avatar avatar-sm">{item.name ? item.name.split(" ").map((x: string) => x[0]).join("") : "US"}</span><div><strong>{item.name}</strong><small>{item.email}</small></div></div></td><td><span className="role-tag">{item.role}</span></td><td>{item.organizationName ?? item.organization ?? "CamOps"}</td><td className="mono text-muted">{item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : item.lastActive ?? "Never"}</td><td><StatusBadge status={item.status} /></td></>
                       ) : kind === "hdds" ? (
-                        <><td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.manufacturer}</small></div></div></td><td className="mono">{item.serial}</td><td><strong>{item.capacity}</strong></td><td className="mono">{devices.find(d => d.id === item.deviceId)?.serial}</td><td><StatusBadge status={item.status} /></td></>
+                        <>
+                          <td><div className="table-primary"><span className="row-icon"><HardDrive size={14} /></span><div><strong>{item.model}</strong><small>{item.brand || item.manufacturer || "Western Digital"}</small></div></div></td>
+                          <td className="mono" style={{ color: "#fbbf24", fontWeight: 600 }}>{item.serialNumber || item.serial}</td>
+                          <td><strong style={{ color: "#a855f7" }}>{item.capacity}</strong></td>
+                          <td>
+                            {comboIdVal ? (
+                              <button
+                                className="status-badge status-healthy"
+                                style={{ cursor: "pointer", border: "1px solid #38bdf8", background: "rgba(56, 189, 248, 0.15)", color: "#7dd3fc" }}
+                                onClick={() => void handleViewCombo(item.comboId || item.comboCode)}
+                                title="View linked Combo details"
+                              >
+                                <Network size={12} style={{ marginRight: "4px" }} />
+                                {comboLabel}
+                              </button>
+                            ) : (
+                              <span className="status-badge status-neutral">Not Linked</span>
+                            )}
+                          </td>
+                          <td><StatusBadge status={item.status} /></td>
+                        </>
                       ) : kind === "combos" ? (
-                        <><td><div className="table-primary"><span className="row-icon"><Network size={14} /></span><div><strong>{item.id.toUpperCase()}</strong><small>{devices.find(d => d.id === item.deviceId)?.serial}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><strong>{item.capacity}</strong><small className="block text-muted">{hdds.find(h => h.id === item.hddId)?.serial}</small></td><td><strong>{item.connectedCameras}</strong> <small className="text-muted">/ {item.connectedCameras + item.availableChannels} channels</small></td><td><StatusBadge status={item.status} /></td></>
+                        <>
+                          <td>
+                            <button
+                              style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer" }}
+                              onClick={() => void handleViewCombo(item)}
+                            >
+                              <div className="table-primary">
+                                <span className="row-icon"><Network size={14} /></span>
+                                <div>
+                                  <strong style={{ color: "#38bdf8" }}>{item.comboCode || (item.id ? item.id.toUpperCase() : "COMBO")}</strong>
+                                  <small>{item.name || item.comboCode || item.id}</small>
+                                </div>
+                              </div>
+                            </button>
+                          </td>
+                          <td>
+                            <strong>{item.depot || item.customer || "Northstar Transit"}</strong>
+                            <small className="block text-muted">{item.customer || "Transit Ops"}</small>
+                          </td>
+                          <td>{item.location}<small className="block text-muted">{item.subLocation}</small></td>
+                          <td>
+                            {item.nvrId ? (
+                              <div>
+                                <span className="mono" style={{ color: "#3b82f6", fontWeight: 600 }}>
+                                  {typeof item.nvrId === "object" ? item.nvrId.serialNumber : "NVR Linked"}
+                                </span>
+                                <small className="block text-muted">{typeof item.nvrId === "object" ? item.nvrId.model : ""}</small>
+                              </div>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td>
+                            {item.dvrId ? (
+                              <div>
+                                <span className="mono" style={{ color: "#10b981", fontWeight: 600 }}>
+                                  {typeof item.dvrId === "object" ? item.dvrId.serialNumber : "DVR Linked"}
+                                </span>
+                                <small className="block text-muted">{typeof item.dvrId === "object" ? item.dvrId.model : ""}</small>
+                              </div>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td>
+                            {item.hddId ? (
+                              <div>
+                                <strong style={{ color: "#a855f7" }}>
+                                  {typeof item.hddId === "object" ? item.hddId.capacity : item.capacity}
+                                </strong>
+                                <small className="block mono text-muted">
+                                  {typeof item.hddId === "object" ? item.hddId.serialNumber : ""}
+                                </small>
+                              </div>
+                            ) : (
+                              <strong style={{ color: "#a855f7" }}>{item.capacity || "—"}</strong>
+                            )}
+                          </td>
+                          <td><StatusBadge status={item.status} /></td>
+                          <td className="mono text-muted">{item.registrationDate || item.createdAt?.split("T")[0] || "—"}</td>
+                        </>
                       ) : kind === "cameras" ? (
                         <><td><div className="table-primary"><span className="row-icon"><Camera size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.physicalLocation}</td><td><span className="mono">{item.combo.toUpperCase()}</span><small className="block text-muted">{combos.find(c => c.id === item.combo)?.location}</small></td><td><span className="mono">{item.ip}</span><small className="block text-muted">{item.type} · {item.megapixel}</small></td><td><StatusBadge status={item.status} /></td></>
                       ) : (
-                        <><td><div className="table-primary"><span className="row-icon"><IconComponent size={14} /></span><div><strong>{item.serial}</strong><small>{item.manufacturer} · {item.model}</small></div></div></td><td>{item.location}<small className="block text-muted">{item.subLocation}</small></td><td><span className="mono">{item.channels}</span> <small className="text-muted">channels</small></td><td className="mono">{item.warrantyExpiry}</td><td><StatusBadge status={item.status} /></td></>
+                        <>
+                          <td>
+                            <div className="table-primary">
+                              <span className="row-icon"><IconComponent size={14} /></span>
+                              <div>
+                                <strong>{item.model}</strong>
+                                <small>{item.brand || item.manufacturer || (kind === "nvrs" ? "Hikvision" : "Hanwha")}</small>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="mono" style={{ color: "#fbbf24", fontWeight: 600 }}>{item.serialNumber || item.serial}</td>
+                          <td>{item.location || "Central Control Campus"}<small className="block text-muted">{item.subLocation}</small></td>
+                          <td><span className="mono">{item.channels || (kind === "nvrs" ? 32 : 16)}</span> <small className="text-muted">channels</small></td>
+                          <td>
+                            {comboIdVal ? (
+                              <button
+                                className="status-badge status-healthy"
+                                style={{ cursor: "pointer", border: "1px solid #38bdf8", background: "rgba(56, 189, 248, 0.15)", color: "#7dd3fc" }}
+                                onClick={() => void handleViewCombo(item.comboId || item.comboCode)}
+                                title="View linked Combo details"
+                              >
+                                <Network size={12} style={{ marginRight: "4px" }} />
+                                {comboLabel}
+                              </button>
+                            ) : (
+                              <span className="status-badge status-neutral">Not Linked</span>
+                            )}
+                          </td>
+                          <td><StatusBadge status={item.status} /></td>
+                        </>
                       )}
                       <td>
-                        <button className="icon-btn table-action" data-testid={`button-edit-${item.id ?? item._id}`} onClick={() => notify({ tone: "info", message: `Viewing details for ${item.name ?? item.serial ?? item.id}` })}>
-                          <Pencil size={15} />
+                        <button
+                          className="icon-btn table-action"
+                          data-testid={`button-edit-${item.id ?? item._id}`}
+                          onClick={() => {
+                            if (kind === "combos" || comboIdVal) {
+                              void handleViewCombo(kind === "combos" ? item : (item.comboId || item.comboCode));
+                            } else {
+                              notify({ tone: "info", message: `Viewing details for ${item.name ?? item.serialNumber ?? item.serial ?? item.id}` });
+                            }
+                          }}
+                          title="View Details"
+                        >
+                          <Eye size={15} />
                         </button>
                         <button className="icon-btn table-action" onClick={() => setConfirm(true)}>
                           <MoreHorizontal size={15} />
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -705,6 +1199,30 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
         </section>
       )}
 
+      {comboModalOpen && (
+        <ComboRegistrationModal
+          onClose={() => setComboModalOpen(false)}
+          onSuccess={(createdCombo, msg) => {
+            setComboModalOpen(false);
+            notify({ tone: "success", message: msg || "Combo registered successfully." });
+            // Refresh all device data since a combo may have created NVR/DVR/HDD linked records
+            void Promise.all([
+              fetchCombos().then(setRealCombos).catch(() => {}),
+              fetchNvrs().then(setRealNvrs).catch(() => {}),
+              fetchDvrs().then(setRealDvrs).catch(() => {}),
+              fetchHdds().then(setRealHdds).catch(() => {}),
+            ]);
+          }}
+        />
+      )}
+
+      {selectedComboDetails && (
+        <ComboDetailsModal
+          combo={selectedComboDetails}
+          onClose={() => setSelectedComboDetails(null)}
+        />
+      )}
+
       {modal && (
         <CrudModal
           title={config[kind].add}
@@ -712,7 +1230,8 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
           onClose={() => setModal(false)}
           onSaved={() => {
             setModal(false);
-            notify({ tone: "success", message: `${kind.slice(0, -1)} record saved.` });
+            notify({ tone: "success", message: `${kind.slice(0, -1).toUpperCase()} record saved to MongoDB Atlas.` });
+            void loadResourceData();
           }}
         />
       )}
@@ -724,7 +1243,7 @@ function ResourcePage({ kind, title, eyebrow, description, notify, currentUser: 
           onSent={(msg) => {
             setInviteModal(false);
             notify({ tone: "success", message: msg });
-            void loadUsersAndInvites();
+            void loadResourceData();
           }}
         />
       )}
